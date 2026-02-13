@@ -34,6 +34,15 @@ fi
 DEVICE_ID=${DEVICE_ID:-0}
 echo "Using device ID: $DEVICE_ID"
 
+# Set automatic setup to skip interactive prompts
+export AUTOMATIC_HOST_SETUP=1
+export MODEL_SOURCE=huggingface
+
+# Override Docker image to use available version
+# Note: Using 5491d3c instead of 0e962a8 for tt_metal_commit
+DOCKER_IMAGE="ghcr.io/tenstorrent/tt-inference-server/vllm-tt-metal-src-release-ubuntu-22.04-amd64:0.7.0-5491d3c-f49265a"
+echo "Using Docker image: $DOCKER_IMAGE"
+
 # Run benchmarks
 echo -e "${GREEN}Running benchmarks...${NC}"
 echo "This will start the inference server, run benchmarks, and shut down."
@@ -42,10 +51,12 @@ echo ""
 python3 run.py \
     --model gpt-oss-20b \
     --device p100 \
+    --impl gpt-oss \
     --workflow benchmarks \
     --docker-server \
     --device-id $DEVICE_ID \
-    --dev-mode
+    --dev-mode \
+    --override-docker-image "$DOCKER_IMAGE"
 
 echo ""
 echo -e "${GREEN}Benchmarks completed!${NC}"
