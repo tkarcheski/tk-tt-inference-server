@@ -6776,6 +6776,34 @@
             }
         ]
     },
+    "yolox_nano": {
+        "n150": [
+            {
+                "max_concurrency": 1,
+                "num_inference_steps": 1,
+                "task_type": "cnn",
+                "targets": {
+                    "theoretical": {
+                        "ttft_ms": 600,
+                        "tput_user": 20
+                    }
+                }
+            }
+        ],
+        "p150": [
+            {
+                "max_concurrency": 1,
+                "num_inference_steps": 1,
+                "task_type": "cnn",
+                "targets": {
+                    "theoretical": {
+                        "ttft_ms": 600,
+                        "tput_user": 20
+                    }
+                }
+            }
+        ]
+    },
     "speecht5_tts": {
         "n150": [
             {
