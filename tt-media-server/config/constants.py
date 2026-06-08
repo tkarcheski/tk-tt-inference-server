@@ -43,7 +43,7 @@ class SupportedModels(Enum):
     GEMMA_4_31B_IT = "google/gemma-4-31B-it"
     FALCON3_7B_INSTRUCT = "tiiuae/Falcon3-7B-Instruct"
     Z_IMAGE_TURBO = "Tongyi-MAI/Z-Image-Turbo"
-    YOLOX_NANO = "yolox_nano"
+    YOLOX_NANO = "Megvii-BaseDetection/YOLOX-Nano"
 
 
 # MODEL environment variable
