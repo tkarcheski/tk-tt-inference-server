@@ -46,19 +46,14 @@ defaults:
     targetPort: 8000
     annotations: {}
   resources:
-    limits: {}
+    limits:
 #      cpu: "8"
 #      memory: 480Gi #~90% of RAM available on Galaxy servers
-# TEMP (fix_helm_issues): hugepages-1Gi request/limit dropped. These RKE2 nodes
-# advertise hugepages-1Gi=0 to the scheduler, so requesting it is unschedulable.
-# The container still gets hugepages via the /dev/hugepages-1G hostPath mount
-# (same as the docker path). Re-add once nodes advertise hugepages as a k8s
-# resource (default_hugepagesz=1G hugepagesz=1G hugepages=N + kubelet).
-#      hugepages-1Gi: 32Gi
+      hugepages-1Gi: 32Gi
     requests:
       cpu: "6"
       memory: 64Gi
-#      hugepages-1Gi: 32Gi
+      hugepages-1Gi: 32Gi
   probes:
     liveness:
       enabled: true
