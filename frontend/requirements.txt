@@ -1,0 +1,35 @@
+# Core Dash dependencies
+dash>=2.15.0
+dash-bootstrap-components>=1.5.0
+plotly>=5.18.0
+
+# Environment and configuration
+python-dotenv>=1.0.0
+
+# HTTP client for API calls
+requests>=2.31.0
+
+# JWT handling
+PyJWT>=2.8.0
+
+# Async support for streaming
+aiohttp>=3.9.0
+
+# Process management
+psutil>=5.9.0
+
+# Type hints
+typing-extensions>=4.8.0
+
+# FastAPI backend
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+httpx>=0.25.0
+pytest-cov>=4.1.0
+
+# Pydantic for data validation
+pydantic>=2.5.0
