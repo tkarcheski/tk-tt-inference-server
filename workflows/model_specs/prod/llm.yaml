@@ -34,6 +34,14 @@ templates:
         MESH_DEVICE: "(4, 8)"  # Override default TG->(8,4) to use (4,8) mesh grid
       vllm_args:
         data_parallel_size: 4
+    - device: P100  # experimental: single Blackhole card, not officially supported
+      max_concurrency: 16  # conservative for a 20B model on one card
+      max_context: 32768  # 32 * 1024
+      default_impl: false
+      override_tt_config:
+        trace_region_size: 30000000
+      env_vars:
+        VLLM_USE_V1: "1"
   status: EXPERIMENTAL
   has_builtin_warmup: true
   env_vars:
