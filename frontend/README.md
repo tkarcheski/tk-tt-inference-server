@@ -196,13 +196,6 @@ DASHBOARD_PORT=8051 ./scripts/p100/start-dashboard.sh
 2. Register callbacks in `frontend/app.py`
 3. Update utils in `frontend/utils/`
 
-### Testing
-
-```bash
-cd frontend
-python3 -m pytest tests/  # If tests exist
-```
-
 ## Known Issues
 
 - Streaming responses may have slight delay in UI update

@@ -24,7 +24,6 @@ from utils import (
     get_tt_smi_output,
     get_tt_smi_list,
 )
-from app_api_client import api_client
 from components import (
     create_prompt_library_component,
     create_env_config_component,
@@ -251,15 +250,19 @@ def update_server_status(
             f"Starting server with model: {selected_model}, context: {context_length}..."
         )
         try:
-            result = api_client.start_server(selected_model, context_length)
-            if result.get("status") == "already_running":
+            if server_manager.is_running():
                 status_message = dbc.Alert(
                     "✅ Server is already running.", color="info"
                 )
-            else:
+            elif server_manager.start():
                 status_message = dbc.Alert(
                     "✅ Server starting... This may take several minutes.",
                     color="success",
+                )
+            else:
+                status_message = dbc.Alert(
+                    "❌ Server failed to start. Check the Logs tab.",
+                    color="danger",
                 )
         except Exception as e:
             logger.error(f"Failed to start server: {e}")
@@ -270,7 +273,7 @@ def update_server_status(
     elif triggered_id == "stop-server-btn" and stop_clicks:
         logger.info("Stopping server...")
         try:
-            api_client.stop_server()
+            server_manager.stop()
             status_message = dbc.Alert("✅ Server stopped.", color="success")
         except Exception as e:
             logger.error(f"Failed to stop server: {e}")
@@ -278,11 +281,11 @@ def update_server_status(
                 f"❌ Failed to stop server: {str(e)}", color="danger"
             )
 
-    # Check current status via API
+    # Check current status
     try:
-        status = api_client.get_server_status()
+        status = server_manager.get_status()
         is_running = status.get("running", False)
-        service_port = status.get("port", "8000")
+        service_port = status.get("port") or current_env.get("SERVICE_PORT", "8000")
     except Exception as e:
         logger.error(f"Failed to get server status: {e}")
         is_running = False
@@ -334,8 +337,7 @@ def update_server_status(
 def update_tt_smi(n_intervals, n_clicks):
     """Update tt-smi output display."""
     try:
-        hardware = api_client.get_hardware()
-        return hardware.get("tt_smi", ""), hardware.get("tt_smi_list", "")
+        return get_tt_smi_output(), get_tt_smi_list()
     except Exception as e:
         logger.error(f"Failed to get hardware info: {e}")
         return f"Error: {str(e)}", ""
@@ -351,9 +353,10 @@ def update_tt_smi(n_intervals, n_clicks):
 )
 def update_logs(n_intervals, n_clicks):
     """Update server logs display."""
+    if server_manager is None:
+        return "Server has not been started yet."
     try:
-        logs = api_client.get_logs(lines=100)
-        return logs
+        return "".join(server_manager.get_logs(lines=100)) or "No logs available."
     except Exception as e:
         return f"Error fetching logs: {str(e)}"
 
@@ -438,15 +441,26 @@ def handle_chat(
     # Add streaming message placeholder
     message_bubbles.append(create_message_bubble("assistant", "", is_streaming=True))
 
-    # Make API call via FastAPI backend
+    # Call the vLLM server directly
     try:
-        # Use the API client to send chat request
-        result = api_client.chat(
+        current_env = current_env or {}
+        service_port = current_env.get("SERVICE_PORT", "8000")
+        jwt_secret = (
+            server_manager.get_current_jwt_secret()
+            if server_manager is not None
+            else current_env.get("JWT_SECRET")
+        )
+        client = VLLMClient(
+            f"http://localhost:{service_port}", jwt_secret=jwt_secret
+        )
+        result = client.chat_completion(
             model=selected_model,
             messages=chat_history,
             max_tokens=max_tokens or 256,
             temperature=temperature or 0.7,
         )
+        if result.get("error"):
+            raise RuntimeError(result["text"])
 
         # Add assistant response to history
         chat_history.append({"role": "assistant", "content": result["text"]})
