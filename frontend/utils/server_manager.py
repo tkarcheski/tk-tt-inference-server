@@ -74,9 +74,12 @@ class ServerManager:
             return True
 
         try:
-            # Build command to run server
-            # Use system python3 which has yaml and other dependencies
-            python_executable = "/home/tyler/.tenstorrent-venv/bin/python3"
+            # Build command to run server. run.py needs the tenstorrent venv
+            # (yaml etc.), not the dashboard's venv — configurable via env.
+            python_executable = self.env_vars.get(
+                "TT_PYTHON",
+                os.path.expanduser("~/.tenstorrent-venv/bin/python3"),
+            )
 
             # Get model-specific configuration
             impl = self.model_config["impl"]

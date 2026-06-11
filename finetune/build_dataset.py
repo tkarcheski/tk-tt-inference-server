@@ -140,7 +140,13 @@ def build(rfc_root: str):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rfc-root", default="/home/tyler/AI/robotframework-chat")
+    ap.add_argument(
+        "--rfc-root",
+        default=os.environ.get(
+            "RFC_ROOT", os.path.expanduser("~/AI/robotframework-chat")
+        ),
+        help="Path to a robotframework-chat checkout (env: RFC_ROOT)",
+    )
     ap.add_argument("--out-dir", default=os.path.join(os.path.dirname(__file__), "out"))
     ap.add_argument("--val-frac", type=float, default=0.1)
     ap.add_argument("--seed", type=int, default=42)

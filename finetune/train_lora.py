@@ -55,7 +55,11 @@ def main():
 
     ds = load_dataset(dataset_id)
     train_ds = ds["train"]
-    eval_ds = ds.get("validation")
+    # Split naming varies (build_dataset.py emits "val", HF convention is
+    # "validation") — accept either rather than silently training without eval.
+    eval_ds = next((ds[k] for k in ("validation", "val") if k in ds), None)
+    if eval_ds is None:
+        print("WARNING: no validation/val split found; training without eval")
 
     lora = LoraConfig(
         r=int(env("LORA_R", "16")),
