@@ -3,3 +3,6 @@
 	url = https://github.com/tenstorrent/tt-llm-engine.git
 	branch = main
 	ignore = dirty
+[submodule "logwatch/metrics"]
+	path = logwatch/metrics
+	url = git@github.com:tkarcheski/logwatch-metrics.git
