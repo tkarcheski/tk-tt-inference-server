@@ -1,0 +1,9 @@
+# LoRA SFT training stack (CPU-compatible; on a GPU node, install the CUDA torch build instead).
+# Mutually-compatible pinned set.
+torch==2.5.1
+transformers==4.46.3
+trl==0.12.2
+peft==0.13.2
+datasets==3.1.0
+accelerate==1.1.1
+sentencepiece==0.2.0
