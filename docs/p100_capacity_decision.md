@@ -3,21 +3,51 @@
 **Question (Tyler):** what tokens/sec can I get on the P100 — should I keep the one
 card, buy more, or wait for the P300? Decide by seeing how the P100 performs.
 
-**Short answer:** the decision does **not** hinge on a fresh throughput number,
-because the more important signal is a *hard* one: the model this whole branch is
-built around — `gpt-oss-20b` — **cannot run on a single P100 at all**, for a
-structural reason no configuration or extra system memory can fix. What you should
-buy depends entirely on whether your real workload is dense small models (P100 is
-plausibly enough) or MoE / large / high-concurrency models (it is not — that needs
-P300-class or multi-card hardware).
+**Short answer:** we now have **real, measured P100 numbers** (below) — a single
+P100 serves dense Llama-3.1-8B at **~29 tok/s/user** and up to **~361 tok/s
+aggregate** at 16 concurrent users. That's plenty for dense ≤8B serving. But the
+model this whole branch is built around — `gpt-oss-20b` — **cannot run on a single
+P100 at all**, for a structural reason no configuration or extra system memory can
+fix. So what you should buy depends entirely on whether your real workload is dense
+small models (the P100 is genuinely good) or MoE / large / high-concurrency models
+(it is not — that needs P300-class or multi-card hardware).
+
+## 0. Measured results (2026-07-02, Llama-3.1-8B on one P100)
+
+Base `meta-llama/Llama-3.1-8B`, 64K-context config, the release image
+`0.7.0-55fd115-aa4ae1e` driven directly (see `scripts/p100/direct_server_p100.sh`,
+benchmarked with `scripts/p100/bench_p100.py`):
+
+| Concurrency | Aggregate tok/s | Per-user tok/s |
+|---|---|---|
+| 1  | 29.2  | **29.2** |
+| 2  | 56.4  | 28.2 |
+| 4  | 108.7 | 27.2 |
+| 8  | 204.7 | 25.6 |
+| 16 | **361.3** | 22.6 |
+
+- **Single-user decode ≈ 29 tok/s** — 88% of the spec's aspirational 33 tok/s/user
+  target, well above the 16.5 "complete" tier. Faster than human reading speed.
+- **Aggregate scales cleanly to ~361 tok/s at 16 users** (per-user degrades
+  gracefully 29 → 23 tok/s).
+- **TTFT ≈ 90 ms** for short prompts (warm). But prefill is slow and grows with
+  prompt length (~4.3 s TTFT at 512–1024-token prompts), and at this 64K config a
+  **≥2048-token prefill crashes** the server with an L1 circular-buffer clash
+  (`program.cpp:916`, cores (0,0)–(6,7)). So long-context prompts need config
+  tuning (smaller `max_context`, or `MAX_PREFILL_CHUNK_SIZE`) before they're usable.
+
+Caveat: this is the **base** model (not instruct-tuned); tok/s is architecture-bound
+so it equals the Instruct rate. The number is real; the branch's own `run.py`
+benchmark workflow could not produce it (broken migration), so it was measured by
+driving the container directly.
 
 ---
 
 ## 1. State of the evidence
 
-There is **no measured P100 tokens/sec anywhere** in this repo, and none could be
-produced this session. `workflow_logs/benchmarks_output/` is empty. Every recorded
-attempt failed before serving a token:
+Until this session there was **no measured P100 tokens/sec anywhere** in this repo
+(now remedied — see §0). `workflow_logs/benchmarks_output/` is empty because every
+prior recorded attempt failed before serving a token:
 
 | Attempt | Model | Outcome |
 |---|---|---|
@@ -74,12 +104,12 @@ Pick the row that matches your actual workload:
 
 **A. Your workload is dense models ≤ ~8B (Llama-3.1-8B, Qwen3-8B, etc.), modest
 context and concurrency.**
-→ **Keep the single P100 — but get the real number before spending anything.** The
-dense path has no core-grid wall; the only prior failure was a first-run cache-gen
-timeout, which the shrunk P100 spec on this branch (4K context, concurrency 1,
-`tensor_cache_timeout=10800`) is designed to clear. Validate against the 33
-tok/s/user single-user target. Do **not** buy more cards for this workload until a
-measured number says the P100 is too slow for your latency/throughput needs.
+→ **Keep the single P100 — the measured numbers say it's enough.** 29 tok/s/user
+single-stream and 361 tok/s aggregate at 16 users (§0) comfortably covers
+interactive chat and modest multi-user serving. Do **not** buy more cards for this
+workload. Two caveats worth fixing rather than buying around: long-prompt prefill is
+slow/fragile at the 64K config (tune `max_context` / `MAX_PREFILL_CHUNK_SIZE`), and
+the branch's `run.py` benchmark path is broken (use `scripts/p100/direct_server_p100.sh`).
 
 **B. Your workload is gpt-oss-20b (or any MoE / 20B+ / long-context / high-
 concurrency serving).**
