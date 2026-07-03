@@ -68,9 +68,13 @@ itself.
 `adversarial, c_interview, causal_reasoning, code_review, context_window,
 extraction, hallucination, legal, quantization, temporal_reasoning`.
 
-The top-level `variables` suite is **excluded** — it is a byte-duplicate of
-`hallucination`'s `numerical_facts` scenarios, and including it would let the
-same answer appear in two suites that could land in different pools.
+The top-level `variables` suite is **excluded** from the gold set because it
+covers the same underlying facts as the `hallucination` canary suite
+(reworded, not identical). Excluding it is a conservative firewall measure:
+training on `variables` could teach a fact that also appears (differently
+worded) in the `hallucination` canary, a fact-level overlap the
+`(user, target)` fingerprint check would NOT catch. Excluding it keeps the
+canary an honest held-out measurement.
 
 **Split mechanics** (`finetune/split_suites.py`):
 - `SALT = "rfc-split-v816"`.
@@ -102,9 +106,12 @@ train/val — i.e. it was training on the eval suite's own answers.
 
 ## Training
 
-- CPU LoRA fine-tune of a Qwen instruct base ≤3B parameters
-  (`finetune/train_lora.py`, default `Qwen/Qwen2.5-3B-Instruct`; never
-  Llama).
+- CPU LoRA fine-tune of a Qwen instruct base. The MODEL_TUNER round
+  (`run_loop.py`) defaults to a `Qwen/Qwen2.5-3B-Instruct` base (env
+  `BASE_MODEL`) for fast CPU-only LoRA cadence. The underlying trainer
+  `train_lora.py` is base-size-agnostic — invoked standalone it defaults to
+  `Qwen/Qwen2.5-7B-Instruct`; it only requires a non-Llama (Qwen) instruct
+  model.
 - `MERGE=1` produces a merged fp16 model, which `serve_ollama.py` turns into
   an Ollama tag via `ollama create --experimental -q q4_K_M`.
 - Environment split: training runs under `finetune/.venv-train` (Python

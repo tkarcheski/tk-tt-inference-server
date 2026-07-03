@@ -66,6 +66,10 @@ RSI_MODE=shadow MAX_STEPS=5 BASE_MODEL=Qwen/Qwen2.5-1.5B-Instruct \
   PYTHONPATH=finetune /home/tyler/.rsi-loop-venv/bin/python finetune/run_loop.py --once --smoke
 ```
 
+Note: under `--smoke`, `run_loop.py` overrides the training base to
+`Qwen/Qwen2.5-0.5B-Instruct`, so `BASE_MODEL` in the smoke command is inert —
+it only takes effect on non-smoke rounds.
+
 ### Env knobs
 
 | Var | Effect |
