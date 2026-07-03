@@ -16,14 +16,9 @@ def split_of(suite_id: str) -> str:
 # --- reuse build_dataset.build()'s exact (user, target) extraction so the
 # --- fingerprint matches the real training key (single source of truth). ---
 def _pair(item):
-    sp = special_pair(item)
-    if sp:
-        return sp                      # (user, target)
-    user = resolve_prompt(item)
-    target = resolve_target(item)
-    if not user or not target:
-        return None
-    return user, target
+    pair = special_pair(item) or (resolve_prompt(item), resolve_target(item))
+    user, target = pair
+    return (user, target) if (user and target) else None
 
 def answer_hashes(rfc_root):
     out = {"train": set(), "holdout": set(), "canary": set()}
@@ -40,6 +35,9 @@ def answer_hashes(rfc_root):
 
 def write_split(rfc_root, out_path):
     hashes = answer_hashes(rfc_root)
+    empty = [p for p in ("train", "holdout", "canary") if not hashes[p]]
+    if empty:
+        raise LeakageError(f"empty fingerprint pool(s) {empty}: refusing to write a vacuous split (is rfc_root correct?)")
     leaked = (hashes["holdout"] | hashes["canary"]) & hashes["train"]
     if leaked:
         raise LeakageError(f"{len(leaked)} answer(s) shared between train and holdout/canary")
