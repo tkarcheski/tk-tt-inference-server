@@ -19,7 +19,7 @@ Never Llama — base must be a Qwen (or other non-Llama) instruct model.
 import os
 
 import torch
-from datasets import load_dataset
+from dataset_loader import load_local_or_hub
 from peft import LoraConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import SFTConfig, SFTTrainer
@@ -53,7 +53,7 @@ def main():
         device_map="auto" if cuda else None,
     )
 
-    ds = load_dataset(dataset_id)
+    ds = load_local_or_hub(dataset_id)
     train_ds = ds["train"]
     # Split naming varies (build_dataset.py emits "val", HF convention is
     # "validation") — accept either rather than silently training without eval.

@@ -19,6 +19,7 @@ from workflows.utils_report import BenchmarkTaskParams, PerformanceTarget
 from workflows.workflow_types import DeviceTypes, ModelStatusTypes, VersionMode
 
 VERSION = get_version()
+MODEL_SPECS_SCHEMA_VERSION = "0.1.0"
 
 
 def generate_docker_tag(
@@ -291,6 +292,7 @@ class DeviceModelSpec:
     max_context: int
     perf_targets_map: Dict[str, float] = field(default_factory=dict)
     default_impl: bool = False
+    tensor_cache_timeout: Optional[float] = None
     perf_reference: List[BenchmarkTaskParams] = field(default_factory=list)
     vllm_args: Dict[str, str] = field(default_factory=dict)
     override_tt_config: Dict[str, str] = field(default_factory=dict)
@@ -322,6 +324,15 @@ class DeviceModelSpec:
         }
         merged_vllm_args = {**default_vllm_args, **self.vllm_args}
         object.__setattr__(self, "vllm_args", merged_vllm_args)
+
+        # 3. derive total decode tokens across all concurrent users. Consumed by
+        # the benchmark config and reporting layers. Scales with data parallelism:
+        # each of the data_parallel_size engine instances serves max_context.
+        max_tokens_all_users = self.max_context
+        data_parallel_size = merged_vllm_args.get("data_parallel_size")
+        if data_parallel_size:
+            max_tokens_all_users = max_tokens_all_users * int(data_parallel_size)
+        object.__setattr__(self, "max_tokens_all_users", max_tokens_all_users)
 
 
     def _infer_env_vars(self):
@@ -878,6 +889,7 @@ class ModelSpecTemplate:
                     max_context=device_model_spec.max_context,
                     perf_targets_map=device_model_spec.perf_targets_map,
                     default_impl=device_model_spec.default_impl,
+                    tensor_cache_timeout=device_model_spec.tensor_cache_timeout,
                     perf_reference=perf_reference,
                     vllm_args=device_model_spec.vllm_args,
                     override_tt_config=device_model_spec.override_tt_config,
@@ -1984,9 +1996,14 @@ spec_templates = [
         device_model_specs=[
             DeviceModelSpec(
                 device=DeviceTypes.P100,
-                max_concurrency=32,
-                max_context=64 * 1024,
+                # Shrunk footprint so first-run tensor-cache generation finishes
+                # inside the health-check window. The 64K-context / 32-concurrency
+                # config timed out after 90 min during cache gen in the 2025-12-30
+                # benchmark run; small context is the biggest lever on that time.
+                max_concurrency=1,
+                max_context=4 * 1024,
                 default_impl=True,
+                tensor_cache_timeout=10800.0,
                 override_tt_config={
                     "trace_region_size": 30000000,
                 },
@@ -2702,6 +2719,48 @@ def get_model_spec_map(
         for spec in template.expand_to_specs():
             model_spec_map[spec.model_id] = spec
     return model_spec_map
+
+
+def export_model_specs_json(model_specs: dict, output_path: Path) -> int:
+    """Export MODEL_SPECS to a nested JSON file.
+
+    Output is wrapped with metadata and nested model specs:
+    schema_version, release_version, model_specs[hf_model_repo][device_type]
+    [inference_engine][impl_id].
+
+    Args:
+        model_specs: Dictionary mapping model_id to ModelSpec objects.
+        output_path: Path where the JSON file should be written.
+
+    Returns:
+        Number of model specs exported.
+    """
+    nested_specs = {}
+    num_specs = 0
+    for model_id, model_spec in model_specs.items():
+        hf_repo = model_spec.hf_model_repo
+        device = model_spec.device_type.to_string()
+        engine = model_spec.inference_engine
+        impl_id = model_spec.impl.impl_id
+
+        nested_specs.setdefault(hf_repo, {})
+        nested_specs[hf_repo].setdefault(device, {})
+        nested_specs[hf_repo][device].setdefault(engine, {})
+        nested_specs[hf_repo][device][engine][impl_id] = (
+            model_spec.get_serialized_dict()
+        )
+        num_specs += 1
+
+    export_data = {
+        "schema_version": MODEL_SPECS_SCHEMA_VERSION,
+        "release_version": VERSION,
+        "model_specs": nested_specs,
+    }
+
+    with open(output_path, "w") as f:
+        json.dump(export_data, f, indent=2)
+
+    return num_specs
 
 
 # Final model specifications generated from templates

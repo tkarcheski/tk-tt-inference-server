@@ -17,9 +17,9 @@ Output (OpenAI chat fine-tuning format), one JSON object per line:
 """
 import argparse
 import glob
+import hashlib
 import json
 import os
-import random
 import re
 
 import yaml
@@ -111,9 +111,11 @@ def iter_scenarios(rfc_root: str):
                         yield suite, item
 
 
-def build(rfc_root: str):
+def build(rfc_root: str, train_suites=None):
     records, seen, per_suite = [], set(), {}
     for suite, item in iter_scenarios(rfc_root):
+        if train_suites is not None and suite not in train_suites:
+            continue
         special = special_pair(item)
         if special:
             user, target = special
@@ -148,28 +150,20 @@ def main():
         help="Path to a robotframework-chat checkout (env: RFC_ROOT)",
     )
     ap.add_argument("--out-dir", default=os.path.join(os.path.dirname(__file__), "out"))
-    ap.add_argument("--val-frac", type=float, default=0.1)
-    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--split", required=True, help="split.json; restrict to its train suites")
     args = ap.parse_args()
 
-    records, per_suite = build(args.rfc_root)
-    random.seed(args.seed)
-    random.shuffle(records)
-
-    n_val = max(1, int(len(records) * args.val_frac)) if records else 0
-    val, train = records[:n_val], records[n_val:]
-
+    train_suites = None
+    if args.split:
+        train_suites = set(json.load(open(args.split))["splits"]["train"])
+    records, per_suite = build(args.rfc_root, train_suites)   # build() skips non-train suites
     os.makedirs(args.out_dir, exist_ok=True)
-    for name, rows in (("train", train), ("val", val), ("all", records)):
-        with open(os.path.join(args.out_dir, f"{name}.jsonl"), "w") as fh:
-            for row in rows:
-                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-
-    print(f"Total extracted: {len(records)}  (train={len(train)}, val={len(val)})")
-    print("Per suite:")
-    for suite, count in sorted(per_suite.items(), key=lambda kv: -kv[1]):
-        print(f"  {count:4d}  {suite}")
-    print(f"\nWrote {args.out_dir}/{{train,val,all}}.jsonl")
+    path = os.path.join(args.out_dir, "train.jsonl")
+    with open(path, "w") as fh:
+        for row in records:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
+    print(f"train_pool_hash={digest} rows={len(records)} suites={sorted(per_suite)}")
 
 
 if __name__ == "__main__":
