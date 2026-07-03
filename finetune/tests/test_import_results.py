@@ -38,6 +38,7 @@ def test_parse_per_test(tmp_path):
 def test_nested_suites_attributed_to_direct_parent(tmp_path):
     p = tmp_path / "output.xml"; p.write_text(NESTED)
     rows = ir.parse_output_xml(str(p))
+    assert len(rows) == 2  # direct-children scan only — no recursive double-count
     by = {r["test_id"]: r for r in rows}
     assert set(by) == {"a1", "b1"}
     assert by["a1"]["suite_id"] == "Child A" and by["a1"]["status"] == "PASS"
