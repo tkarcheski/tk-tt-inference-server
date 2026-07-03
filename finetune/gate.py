@@ -1,3 +1,4 @@
+import contextlib
 from scipy.stats import binomtest
 import rsi_common
 
@@ -21,7 +22,7 @@ def matched_outcomes(base_id, tuned_id, pool):
            from rsi.test_results where pool=%s and experiment_id in (%s,%s)
            group by suite_id, test_id, repeat_idx
            having count(distinct experiment_id)=2"""
-    with rsi_common.connect() as c, c.cursor() as cur:
+    with contextlib.closing(rsi_common.connect()) as c, c.cursor() as cur:
         cur.execute(q, (base_id, tuned_id, pool, base_id, tuned_id))
         return [(r[3], r[4]) for r in cur.fetchall()]
 

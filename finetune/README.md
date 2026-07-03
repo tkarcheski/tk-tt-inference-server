@@ -41,8 +41,8 @@ measured baseline, deviations from plan).
 
 ### Prereqs
 
-- Glue venv `/home/tyler/.rsi-loop-venv` (psycopg2-binary, scipy — runs
-  everything except training).
+- Glue venv `/home/tyler/.rsi-loop-venv` (psycopg2-binary, scipy, lxml,
+  pyyaml, tiktoken, datasets, pytest — runs everything except training).
 - Training venv `finetune/.venv-train` (Python 3.10 + torch/datasets/peft/
   transformers/trl).
 - Postgres `rfc` reachable on `localhost:5434` (container

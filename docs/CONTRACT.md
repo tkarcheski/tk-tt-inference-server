@@ -118,7 +118,8 @@ train/val — i.e. it was training on the eval suite's own answers.
   3.10 + torch/datasets/peft/transformers/trl). Every other loop module
   (`split_suites`, `build_dataset`, `eval_rfc`, `import_results`, `gate`,
   `run_loop`, and the test suite) runs under the glue venv,
-  `/home/tyler/.rsi-loop-venv` (psycopg2-binary, scipy, no torch).
+  `/home/tyler/.rsi-loop-venv` (psycopg2-binary, scipy, lxml, pyyaml,
+  tiktoken, datasets, pytest — no torch).
 
 ## Gate
 
@@ -130,6 +131,11 @@ pass-rate improvement) **and** `p_value < 0.05`. **Canary is the promotion
 metric**; **holdout is the sanity read** — `run_loop.py` requires both to
 pass before it will even consider proposing (`report["proposed"] =
 canary["passes"] and holdout["passes"]`).
+
+**`RSI_REPEATS > 1` caveat:** each repeat of a test is treated as an
+independent McNemar pair, but repeats of the same test are correlated, not
+independent — so `RSI_REPEATS > 1` inflates `n` and understates `p_value`
+versus what the exact test assumes. Default is `RSI_REPEATS=1`.
 
 ## Shadow-only / promotion
 

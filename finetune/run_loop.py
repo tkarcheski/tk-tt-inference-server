@@ -10,7 +10,7 @@ on a passing gate it opens a DRAFT PR (gated behind RSI_OPEN_PR=1 and
 explicitly taken out of shadow mode via env, and nothing in this file acts on
 that beyond the check itself.
 """
-import argparse, json, os, subprocess, uuid, pathlib
+import argparse, contextlib, json, os, subprocess, sys, uuid, pathlib
 import rsi_common, split_suites, serve_ollama, eval_rfc, import_results, gate
 
 FT = pathlib.Path(__file__).parent
@@ -37,7 +37,7 @@ def new_experiment(intent, **f):
     cols = ["experiment_id", "intent"] + list(f.keys())
     vals = [eid, intent] + list(f.values())
     ph = ",".join(["%s"] * len(cols))
-    with rsi_common.connect() as c, c.cursor() as cur:
+    with contextlib.closing(rsi_common.connect()) as c, c.cursor() as cur:
         cur.execute(f"insert into rsi.experiments ({','.join(cols)}) values ({ph})", vals)
         c.commit()
     return eid
@@ -51,6 +51,8 @@ def _eval_arm(experiment_id, arm, splits):
                 xml = eval_rfc.run_suite(suite, arm, rd)
                 if os.path.exists(xml):
                     import_results.import_results(xml, experiment_id, pool, r)
+                else:
+                    print(f"WARN: no output.xml for {pool}/{suite} rep{r} (arm={arm.get('model')}) at {xml}", file=sys.stderr)
 
 def run_round(once=True, smoke=False):
     if os.environ.get("RSI_KILL", "0") == "1":
@@ -101,6 +103,12 @@ def run_round(once=True, smoke=False):
     report = {"base_id": base_id, "tuned_id": tuned_id,
               "holdout": holdout, "canary": canary,
               "train_pool_hash": train_pool_hash, "lora_hash": lora_hash}
+
+    report["degenerate"] = (holdout.get("n", 0) == 0 or canary.get("n", 0) == 0)
+    if report["degenerate"]:
+        print(f"WARN: degenerate eval — holdout n={holdout.get('n')}, canary n={canary.get('n')}; "
+              f"a broken harness or identical arms can look like 'no improvement'. NOT trusting this round.",
+              file=sys.stderr)
 
     # 7) SHADOW ONLY: propose, never swap an endpoint, never auto-merge
     report["proposed"] = bool(canary["passes"] and holdout["passes"])
