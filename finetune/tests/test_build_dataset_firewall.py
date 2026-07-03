@@ -30,8 +30,9 @@ def test_no_train_row_overlaps_test_fingerprints(tmp_path):
     ], check=True)
     split = json.load(open(ROOT / "split.json"))
     test_fps = set(split["_hashes"]["holdout"]) | set(split["_hashes"]["canary"])
-    for line in open(out / "train.jsonl"):
-        rec = json.loads(line)
+    rows = [json.loads(line) for line in open(out / "train.jsonl")]
+    assert rows, "no train rows emitted"
+    for rec in rows:
         user, target = rec["messages"][1]["content"], rec["messages"][2]["content"]
         fp = hashlib.sha256((user + "\x00" + target).encode()).hexdigest()
         assert fp not in test_fps, f"train row leaked a test fingerprint: {user[:60]!r}"

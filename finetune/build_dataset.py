@@ -150,7 +150,7 @@ def main():
         help="Path to a robotframework-chat checkout (env: RFC_ROOT)",
     )
     ap.add_argument("--out-dir", default=os.path.join(os.path.dirname(__file__), "out"))
-    ap.add_argument("--split", help="split.json; restrict to its train suites")
+    ap.add_argument("--split", required=True, help="split.json; restrict to its train suites")
     args = ap.parse_args()
 
     train_suites = None
