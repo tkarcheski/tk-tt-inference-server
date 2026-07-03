@@ -21,6 +21,17 @@ def can_promote():
     return os.environ.get("RSI_MODE", "shadow") == "live" and \
            os.environ.get("RSI_AGENTS_ENABLED", "true") != "false"
 
+def maybe_open_pr(report):
+    """SHADOW-ONLY: open a DRAFT PR proposal iff the round proposed a promotion,
+    we are NOT in a human-gated live-promote mode, and PR-opening is opted in.
+    Returns True iff a draft PR was requested. Never merges, never promotes."""
+    if report.get("proposed") and not can_promote() and os.environ.get("RSI_OPEN_PR") == "1":
+        subprocess.run(["gh", "pr", "create", "--draft",
+                        "--title", f"MODEL_TUNER proposal {report['tuned_id'][:8]}",
+                        "--body", json.dumps(report, indent=2)], check=False)
+        return True
+    return False
+
 def new_experiment(intent, **f):
     eid = str(uuid.uuid4())
     cols = ["experiment_id", "intent"] + list(f.keys())
@@ -93,10 +104,7 @@ def run_round(once=True, smoke=False):
 
     # 7) SHADOW ONLY: propose, never swap an endpoint, never auto-merge
     report["proposed"] = bool(canary["passes"] and holdout["passes"])
-    if report["proposed"] and not can_promote() and os.environ.get("RSI_OPEN_PR") == "1":
-        subprocess.run(["gh", "pr", "create", "--draft",
-                        "--title", f"MODEL_TUNER proposal {tuned_id[:8]}",
-                        "--body", json.dumps(report, indent=2)], check=False)
+    maybe_open_pr(report)
     print(json.dumps(report, indent=2))
     return report
 
