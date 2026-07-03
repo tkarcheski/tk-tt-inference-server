@@ -1,3 +1,4 @@
+import contextlib
 from xml.etree import ElementTree as ET
 import rsi_common
 
@@ -22,13 +23,15 @@ def parse_output_xml(path):
 
 def import_results(path, experiment_id, pool, repeat_idx=0):
     rows = parse_output_xml(path)
-    with rsi_common.connect() as c, c.cursor() as cur:
+    inserted = 0
+    with contextlib.closing(rsi_common.connect()) as c, c.cursor() as cur:
         for r in rows:
             cur.execute(
                 """insert into rsi.test_results
                    (experiment_id, suite_id, test_id, pool, status, grader_rationale, repeat_idx)
                    values (%s,%s,%s,%s,%s,%s,%s)
-                   on conflict do nothing""",
+                   on conflict (experiment_id, suite_id, test_id, pool, repeat_idx) do nothing""",
                 (experiment_id, r["suite_id"], r["test_id"], pool, r["status"], r["grader_rationale"], repeat_idx))
+            inserted += cur.rowcount
         c.commit()
-    return len(rows)
+    return inserted

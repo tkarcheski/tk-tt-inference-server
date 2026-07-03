@@ -27,5 +27,5 @@ CREATE TABLE IF NOT EXISTS rsi.test_results (
   status           text NOT NULL,                -- 'PASS' | 'FAIL' | 'SKIP'
   grader_rationale text,
   repeat_idx       integer NOT NULL DEFAULT 0,
-  PRIMARY KEY (experiment_id, suite_id, test_id, repeat_idx)
+  PRIMARY KEY (experiment_id, suite_id, test_id, pool, repeat_idx)
 );
