@@ -153,11 +153,15 @@ def round_config(idx):
     sensible LoRA grid and advances the training seed every round. Returns
     env-var overrides consumed by train_lora.py (LORA_R/LORA_ALPHA/LR/MAX_STEPS)
     and recorded as the experiment `seed`."""
+    # MAX_STEPS sized to the small train pool (~136 examples, effective batch 8 →
+    # ~17 optimizer steps/epoch). 20-50 steps ≈ 1-3 epochs. Keep these LOW: 200+
+    # steps is ~12-24 epochs, which memorizes the pool (observed train_loss→0.06)
+    # and hurts held-out/canary generalization.
     grid = [
-        {"LORA_R": "8",  "LORA_ALPHA": "16", "LR": "2e-4", "MAX_STEPS": "200"},
-        {"LORA_R": "16", "LORA_ALPHA": "32", "LR": "2e-4", "MAX_STEPS": "300"},
-        {"LORA_R": "16", "LORA_ALPHA": "32", "LR": "1e-4", "MAX_STEPS": "400"},
-        {"LORA_R": "32", "LORA_ALPHA": "64", "LR": "1e-4", "MAX_STEPS": "300"},
+        {"LORA_R": "8",  "LORA_ALPHA": "16", "LR": "2e-4", "MAX_STEPS": "20"},
+        {"LORA_R": "16", "LORA_ALPHA": "32", "LR": "2e-4", "MAX_STEPS": "30"},
+        {"LORA_R": "16", "LORA_ALPHA": "32", "LR": "1e-4", "MAX_STEPS": "40"},
+        {"LORA_R": "32", "LORA_ALPHA": "64", "LR": "1e-4", "MAX_STEPS": "50"},
     ]
     cfg = dict(grid[idx % len(grid)])
     cfg["SEED"] = str(1000 + idx)

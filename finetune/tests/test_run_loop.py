@@ -11,6 +11,9 @@ def test_round_config_is_deterministic_and_varies_per_round():
     for i in range(4):
         c = rl.round_config(i)
         assert {"LORA_R", "LORA_ALPHA", "LR", "MAX_STEPS", "SEED"} <= set(c)
+        # Guard: MAX_STEPS stays sized to the ~136-example pool (~17 steps/epoch).
+        # >~60 steps overfits (memorizes → hurts generalization); keep it low.
+        assert int(c["MAX_STEPS"]) <= 60
 
 def test_should_stop_kill_switch(monkeypatch, tmp_path):
     monkeypatch.delenv("RSI_KILL", raising=False)
