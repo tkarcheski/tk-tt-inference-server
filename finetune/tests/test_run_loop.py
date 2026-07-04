@@ -1,5 +1,19 @@
 import run_loop as rl
 
+def test_filter_eval_suites_drops_only_named_suites_from_eval():
+    splits = {"train": ["a", "b"], "holdout": ["context_window", "extraction"],
+              "canary": ["hallucination", "legal"]}
+    out, dropped = rl.filter_eval_suites(splits, ["context_window"])
+    assert out["holdout"] == ["extraction"]           # skipped one dropped
+    assert out["canary"] == ["hallucination", "legal"]  # untouched
+    assert out["train"] == ["a", "b"]                  # firewall/train untouched
+    assert dropped == {"holdout": ["context_window"]}
+
+def test_filter_eval_suites_noop_when_skip_empty():
+    splits = {"holdout": ["extraction"], "canary": ["legal"]}
+    out, dropped = rl.filter_eval_suites(splits, [])
+    assert out == splits and dropped == {}
+
 def test_new_experiment_inserts_and_returns_uuid():
     eid = rl.new_experiment("model_tuner_round", provider_variant="ollama",
                             serving_runtime="ollama", base_model_sha="deadbeef")

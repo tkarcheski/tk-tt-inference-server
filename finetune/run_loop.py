@@ -42,6 +42,26 @@ def new_experiment(intent, **f):
         c.commit()
     return eid
 
+def filter_eval_suites(splits, skip):
+    """Drop latency-bound / non-discriminating suites from the EVAL pools only.
+
+    The frozen firewall split on disk is unchanged — train pool and the leakage
+    check are untouched. This ONLY curtails which holdout/canary suites are
+    actually evaluated this round (e.g. the needle-in-haystack `context_window`
+    stress suite is latency-bound and gives no signal between near-identical
+    arms). Returns (new_splits, dropped) where `dropped` maps pool -> [suite].
+    """
+    skip = set(skip)
+    out = dict(splits)
+    dropped = {}
+    for pool in ("holdout", "canary"):
+        d = [s for s in splits.get(pool, []) if s in skip]
+        if d:
+            dropped[pool] = d
+            out[pool] = [s for s in splits[pool] if s not in skip]
+    return out, dropped
+
+
 def _eval_arm(experiment_id, arm, splits):
     """Run every holdout+canary suite for one arm; import per-test rows."""
     for pool in ("holdout", "canary"):
@@ -60,6 +80,14 @@ def run_round(once=True, smoke=False):
     # 1) frozen firewall + leak check (raises LeakageError on contamination)
     split = split_suites.write_split(eval_rfc.RFC, FT / "split.json")
     splits = split["splits"]
+    # Curate latency-bound eval suites (firewall split on disk stays frozen).
+    skip = [s for s in os.environ.get("RSI_SKIP_SUITES", "").split(",") if s]
+    splits, dropped = filter_eval_suites(splits, skip)
+    for pool, d in dropped.items():
+        print(f"WARN: NOT evaluating suites {d} in pool '{pool}' this round "
+              f"(RSI_SKIP_SUITES); they remain in the frozen firewall split but "
+              f"are skipped for latency, so pool '{pool}' signal is reduced.",
+              file=sys.stderr)
     train_hash_line = subprocess.run(
         ["/home/tyler/.rsi-loop-venv/bin/python", str(FT / "build_dataset.py"),
          "--rfc-root", eval_rfc.RFC, "--split", str(FT / "split.json"),
