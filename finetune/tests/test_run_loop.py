@@ -1,5 +1,77 @@
 import run_loop as rl
 
+def test_round_config_is_deterministic_and_varies_per_round():
+    # Same index → same config; seed advances every round; grid cycles.
+    assert rl.round_config(0) == rl.round_config(0)
+    assert rl.round_config(0)["SEED"] == "1000"
+    assert rl.round_config(1)["SEED"] == "1001"
+    assert rl.round_config(0) != rl.round_config(1)          # distinct experiments
+    assert rl.round_config(0)["LORA_R"] == rl.round_config(4)["LORA_R"]  # grid cycles at len 4
+    assert rl.round_config(4)["SEED"] == "1004"              # but seed keeps advancing
+    for i in range(4):
+        c = rl.round_config(i)
+        assert {"LORA_R", "LORA_ALPHA", "LR", "MAX_STEPS", "SEED"} <= set(c)
+        # Guard: MAX_STEPS stays sized to the ~136-example pool (~17 steps/epoch).
+        # >~60 steps overfits (memorizes → hurts generalization); keep it low.
+        assert int(c["MAX_STEPS"]) <= 60
+
+def test_should_stop_kill_switch(monkeypatch, tmp_path):
+    monkeypatch.delenv("RSI_KILL", raising=False)
+    sf = tmp_path / "stop"
+    assert rl.should_stop(str(sf)) is False
+    sf.write_text("")                       # stop-file present
+    assert rl.should_stop(str(sf)) is True
+    sf.unlink()
+    monkeypatch.setenv("RSI_KILL", "1")      # env kill switch
+    assert rl.should_stop(str(sf)) is True
+
+def test_run_forever_stops_on_stop_file(monkeypatch, tmp_path):
+    monkeypatch.delenv("RSI_KILL", raising=False)
+    sf = tmp_path / "stop"; sf.write_text("")   # already stopped
+    calls = []
+    n = rl.run_forever(run_round_fn=lambda **k: calls.append(1) or {},
+                       sleep_fn=lambda s: None, smoke=True, sleep_s=0, stop_file=str(sf))
+    assert n == 0 and calls == []               # never ran a round
+
+def test_run_forever_runs_max_rounds_then_exits(monkeypatch, tmp_path):
+    monkeypatch.delenv("RSI_KILL", raising=False)
+    calls = []
+    n = rl.run_forever(run_round_fn=lambda **k: calls.append(k) or {"proposed": False},
+                       sleep_fn=lambda s: None, smoke=True, sleep_s=0,
+                       stop_file=str(tmp_path / "nope"), max_rounds=3)
+    assert n == 3 and len(calls) == 3
+
+def test_run_forever_continues_after_a_failed_round(monkeypatch, tmp_path):
+    # A round that raises must NOT kill the loop; later rounds still run.
+    monkeypatch.delenv("RSI_KILL", raising=False)
+    seen = []
+    def flaky(**k):
+        seen.append(1)
+        if len(seen) == 1:
+            raise RuntimeError("boom")   # first round explodes
+        return {"proposed": False}
+    n = rl.run_forever(run_round_fn=flaky, sleep_fn=lambda s: None, smoke=True,
+                       sleep_s=0, stop_file=str(tmp_path / "nope"), max_rounds=3)
+    assert n == 3 and len(seen) == 3       # survived the failure, ran all 3
+
+def test_run_forever_smoke_caps_max_steps(monkeypatch, tmp_path):
+    import os
+    monkeypatch.delenv("RSI_KILL", raising=False)
+    seen = []
+    rl.run_forever(run_round_fn=lambda **k: seen.append(os.environ.get("MAX_STEPS")) or {},
+                   sleep_fn=lambda s: None, smoke=True, sleep_s=0,
+                   stop_file=str(tmp_path / "nope"), max_rounds=2)
+    assert seen == ["3", "3"]                     # tiny, not the grid's 200/300
+
+def test_run_forever_real_uses_grid_max_steps(monkeypatch, tmp_path):
+    import os
+    monkeypatch.delenv("RSI_KILL", raising=False)
+    seen = []
+    rl.run_forever(run_round_fn=lambda **k: seen.append(os.environ.get("MAX_STEPS")) or {},
+                   sleep_fn=lambda s: None, smoke=False, sleep_s=0,
+                   stop_file=str(tmp_path / "nope"), max_rounds=2)
+    assert seen == [rl.round_config(0)["MAX_STEPS"], rl.round_config(1)["MAX_STEPS"]]
+
 def test_filter_eval_suites_drops_only_named_suites_from_eval():
     splits = {"train": ["a", "b"], "holdout": ["context_window", "extraction"],
               "canary": ["hallucination", "legal"]}
