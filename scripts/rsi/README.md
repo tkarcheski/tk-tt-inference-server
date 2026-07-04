@@ -48,6 +48,7 @@ scripts/rsi/rsictl.sh follow      # tail the journal
 | `RSI_SKIP_SUITES` | `context_window,legal` | Eval suites skipped for latency (frozen firewall split untouched). |
 | `RSI_MODE` | `shadow` | Keep `shadow`. `live` only enables the (unimplemented) promote path's gate. |
 | `RSI_MAX_ROUNDS` | `0` | `>0` caps total rounds (mostly for testing). |
+| `RSI_PUBLISH` | *(unset)* | `1` arms the publish pipeline: on a passing gate, push the GGUF to the git-LFS registry submodule + cut a GitHub release on the fork. Off by default. See `docs/rsi-loop.md` → Publishing. Rollback: `gh release delete` + delete the submodule tag/commit + `ollama rm`. |
 
 Example — validate fast, then go real:
 

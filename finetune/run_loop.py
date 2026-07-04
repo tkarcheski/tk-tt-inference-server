@@ -11,7 +11,7 @@ explicitly taken out of shadow mode via env, and nothing in this file acts on
 that beyond the check itself.
 """
 import argparse, contextlib, json, os, subprocess, sys, time, traceback, uuid, pathlib
-import rsi_common, split_suites, serve_ollama, eval_rfc, import_results, gate
+import rsi_common, split_suites, serve_ollama, eval_rfc, import_results, gate, publish
 
 FT = pathlib.Path(__file__).parent
 BASE_MODEL = os.environ.get("BASE_MODEL", "Qwen/Qwen2.5-3B-Instruct")
@@ -131,7 +131,7 @@ def run_round(once=True, smoke=False):
     # 6) McNemar gate — canary is the promotion metric, holdout is the sanity read
     holdout = gate.mcnemar_gate(base_id, tuned_id, "holdout")
     canary = gate.mcnemar_gate(base_id, tuned_id, "canary")
-    report = {"base_id": base_id, "tuned_id": tuned_id,
+    report = {"base_id": base_id, "tuned_id": tuned_id, "seed": seed,
               "holdout": holdout, "canary": canary,
               "train_pool_hash": train_pool_hash, "lora_hash": lora_hash}
 
@@ -144,6 +144,7 @@ def run_round(once=True, smoke=False):
     # 7) SHADOW ONLY: propose, never swap an endpoint, never auto-merge
     report["proposed"] = bool(canary["passes"] and holdout["passes"])
     maybe_open_pr(report)
+    publish.maybe_publish(report, merged)  # opt-in RSI_PUBLISH=1; no-op unless proposed
     print(json.dumps(report, indent=2))
     return report
 
