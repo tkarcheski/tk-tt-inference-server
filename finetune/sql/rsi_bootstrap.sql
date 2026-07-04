@@ -29,3 +29,16 @@ CREATE TABLE IF NOT EXISTS rsi.test_results (
   repeat_idx       integer NOT NULL DEFAULT 0,
   PRIMARY KEY (experiment_id, suite_id, test_id, pool, repeat_idx)
 );
+
+-- One row per auto-published model (a round that cleared the promotion gate).
+-- UNIQUE(tuned_id) gives the loop idempotency: a tuned model publishes at most once.
+CREATE TABLE IF NOT EXISTS rsi.publications (
+  version           text PRIMARY KEY,            -- v{seed}-{adapter_hash[:8]}
+  tuned_id          uuid NOT NULL REFERENCES rsi.experiments(experiment_id),
+  submodule_commit  text,                        -- git-LFS registry commit SHA
+  release_url       text,                        -- GitHub release on the fork
+  holdout_delta_pp  numeric,
+  canary_delta_pp   numeric,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tuned_id)
+);

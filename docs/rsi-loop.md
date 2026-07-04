@@ -132,6 +132,31 @@ A human reviews the warehouse and decides every promotion.
 
 ---
 
+## Publishing (`publish.py`, opt-in)
+
+Separate from serving-promotion (which the loop never does), the loop can
+**publish** a winning model. `publish.maybe_publish(report, merged)` fires from
+`run_round` only when the strict gate passed (`report["proposed"]`) **and**
+`RSI_PUBLISH == "1"` (master switch, default off). On a pass it:
+
+1. **git-submodule model registry** — copies the GGUF + a `Modelfile` + a
+   provenance `card.md` into the LFS-backed submodule at `ollama-models/`
+   (repo `tkarcheski/rsi-ollama-models`), path `rsi-qwen/v{seed}-{hash8}/`, and
+   pushes a tagged commit (`rsi-qwen-v{seed}-{hash8}`). Consumers
+   `git clone` + `git checkout <tag>` + `ollama create`.
+2. **GitHub release** — `gh release create` on the **fork**
+   (`tkarcheski/tk-tt-inference-server`, never upstream) as the human record:
+   McNemar deltas, provenance, and the clone-and-create instructions.
+3. **`rsi.publications`** — records the publication for audit and idempotency
+   (`UNIQUE(tuned_id)` → a tuned model is published at most once).
+
+Each step is isolated (one failing step is logged and never crashes the round or
+blocks the others). Version `v{seed}-{adapter_hash[:8]}` never overwrites, so
+every publish is immutably pinned in the registry by tag. Rollback:
+`gh release delete` + delete the submodule tag/commit + `ollama rm`.
+
+---
+
 ## The 24/7 supervisor (`run_loop.py --forever` + `scripts/rsi/`)
 
 `run_forever()` runs rounds continuously:
@@ -171,6 +196,9 @@ for operations.
   `PRIMARY KEY (experiment_id, suite_id, test_id, pool, repeat_idx)`, plus
   `status` (PASS/FAIL/SKIP text) and `grader_rationale`. `pool` is in the PK so a
   cross-pool suite/test-name collision can't silently drop a gate-feeding row.
+- **`rsi.publications`** — one row per auto-published model: `version` (PK),
+  `tuned_id` (`UNIQUE` → idempotent), `submodule_commit`, `release_url`,
+  `holdout_delta_pp`, `canary_delta_pp`, `created_at`.
 
 ---
 
@@ -192,6 +220,8 @@ for operations.
 | `RSI_MODE` | `shadow` | `live` only flips the (inert) promote gate; keep `shadow`. |
 | `RSI_AGENTS_ENABLED` | `true` | Second promote-gate condition; `false` forces `can_promote()` False even in `live`. |
 | `RSI_OPEN_PR` | *(unset)* | `1` allows draft-PR proposals (still triple-gated). |
+| `RSI_PUBLISH` | *(unset)* | `1` arms the publish pipeline (registry push + GitHub release on a passing gate). |
+| `RSI_MODELS_SUBMODULE` | `ollama-models` | Path to the git-LFS model-registry submodule. |
 | `RSI_REPEATS` | `1` | Eval repeats per suite. |
 | `MAX_STEPS` / `SEED` / `LORA_R` / `LORA_ALPHA` / `LR` | grid-driven | Per-round `train_lora` knobs (set by `round_config`). |
 
