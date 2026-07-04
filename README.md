@@ -1,4 +1,4 @@
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/tenstorrent/tt-inference-server)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/tkarcheski/tk-tt-inference-server)
 
 # tt-inference-server
 
