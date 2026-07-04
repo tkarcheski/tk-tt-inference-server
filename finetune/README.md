@@ -4,6 +4,10 @@ Pipeline: extract Q→A pairs from robotframework-chat scenario YAMLs, LoRA-tune
 a Qwen instruct model on them, then (eventually) evaluate the adapter against
 the rfc suites. See `docs/p100_demo_branch.md` for the bigger picture.
 
+**The full self-improving MODEL_TUNER loop — architecture, the McNemar gate,
+shadow-only safety, and the 24/7 service — is documented in
+[`docs/rsi-loop.md`](../docs/rsi-loop.md).**
+
 ## Fast loop
 
 ```bash
