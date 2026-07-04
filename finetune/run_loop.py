@@ -10,7 +10,7 @@ on a passing gate it opens a DRAFT PR (gated behind RSI_OPEN_PR=1 and
 explicitly taken out of shadow mode via env, and nothing in this file acts on
 that beyond the check itself.
 """
-import argparse, contextlib, json, os, subprocess, sys, uuid, pathlib
+import argparse, contextlib, json, os, subprocess, sys, time, traceback, uuid, pathlib
 import rsi_common, split_suites, serve_ollama, eval_rfc, import_results, gate
 
 FT = pathlib.Path(__file__).parent
@@ -111,7 +111,9 @@ def run_round(once=True, smoke=False):
     tuned_tag = serve_ollama.create_tag(merged, "rsi-qwen:round")
     base_tag = os.environ.get("RSI_BASE_TAG", "qwen2.5:3b")
 
-    # 4) provenance rows (base is a frozen reference each round)
+    # 4) provenance rows (base is a frozen reference each round). Record the
+    # per-round training seed so 24/7 rounds are distinguishable experiments.
+    seed = int(os.environ.get("SEED", "0") or "0")
     base_id = new_experiment("baseline", provider_variant="ollama",
                              serving_runtime="ollama", base_model_sha=base_tag,
                              lora_adapter_hash=None, train_pool_hash=None,
@@ -119,7 +121,8 @@ def run_round(once=True, smoke=False):
     tuned_id = new_experiment("model_tuner_round", provider_variant="ollama",
                               serving_runtime="ollama", base_model_sha=base_tag,
                               lora_adapter_hash=lora_hash, train_pool_hash=train_pool_hash,
-                              leakage_score=0, train_hardware="cpu", parent_experiment_id=base_id)
+                              leakage_score=0, train_hardware="cpu", seed=seed,
+                              parent_experiment_id=base_id)
 
     # 5) evaluate both arms on the SAME Ollama endpoint (paired control)
     _eval_arm(base_id, {"provider": "ollama", "model": base_tag}, splits)
@@ -144,9 +147,95 @@ def run_round(once=True, smoke=False):
     print(json.dumps(report, indent=2))
     return report
 
+def round_config(idx):
+    """Deterministic per-round hyperparameter variation, so each 24/7 round is a
+    distinct experiment rather than a re-roll of the same tune. Cycles a small,
+    sensible LoRA grid and advances the training seed every round. Returns
+    env-var overrides consumed by train_lora.py (LORA_R/LORA_ALPHA/LR/MAX_STEPS)
+    and recorded as the experiment `seed`."""
+    grid = [
+        {"LORA_R": "8",  "LORA_ALPHA": "16", "LR": "2e-4", "MAX_STEPS": "200"},
+        {"LORA_R": "16", "LORA_ALPHA": "32", "LR": "2e-4", "MAX_STEPS": "300"},
+        {"LORA_R": "16", "LORA_ALPHA": "32", "LR": "1e-4", "MAX_STEPS": "400"},
+        {"LORA_R": "32", "LORA_ALPHA": "64", "LR": "1e-4", "MAX_STEPS": "300"},
+    ]
+    cfg = dict(grid[idx % len(grid)])
+    cfg["SEED"] = str(1000 + idx)
+    return cfg
+
+
+def should_stop(stop_file):
+    """Kill switch: env RSI_KILL=1 or the existence of the stop-file. A running
+    24/7 service is halted ergonomically by `touch`-ing the stop-file."""
+    return os.environ.get("RSI_KILL", "0") == "1" or bool(stop_file and os.path.exists(stop_file))
+
+
+def run_forever(run_round_fn=None, sleep_fn=time.sleep, smoke=None,
+                sleep_s=None, stop_file=None, max_rounds=None):
+    """Supervisor: run rounds back-to-back until stopped.
+
+    A failing round is logged and the loop CONTINUES — one bad round (OOM, a
+    transient serve/eval error) must never take the whole 24/7 loop down. Stops
+    on: RSI_KILL=1, the stop-file existing, or max_rounds reached. Shadow-only
+    behavior is inherited wholesale from run_round: this supervisor never
+    promotes, never swaps a serving endpoint, and only ever proposes.
+
+    All knobs are injectable for testing and default from env:
+      RSI_SMOKE=1        tiny/fast rounds        (default real rounds)
+      RSI_LOOP_SLEEP     seconds between rounds   (default 300)
+      RSI_STOP_FILE      kill-switch path         (default finetune/.rsi-stop)
+      RSI_MAX_ROUNDS     >0 caps rounds           (default 0 = unlimited)
+    """
+    run_round_fn = run_round if run_round_fn is None else run_round_fn
+    smoke = (os.environ.get("RSI_SMOKE", "0") == "1") if smoke is None else smoke
+    sleep_s = int(os.environ.get("RSI_LOOP_SLEEP", "300")) if sleep_s is None else sleep_s
+    stop_file = os.environ.get("RSI_STOP_FILE", str(FT / ".rsi-stop")) if stop_file is None else stop_file
+    if max_rounds is None:
+        m = int(os.environ.get("RSI_MAX_ROUNDS", "0"))
+        max_rounds = m if m > 0 else None
+    print(f"RSI loop starting: smoke={smoke} sleep={sleep_s}s stop_file={stop_file} "
+          f"max_rounds={max_rounds or 'unlimited'} mode={os.environ.get('RSI_MODE', 'shadow')}",
+          file=sys.stderr, flush=True)
+    idx = 0
+    while True:
+        if should_stop(stop_file):
+            print(f"RSI loop stopping (kill switch / stop-file {stop_file}) after {idx} rounds",
+                  file=sys.stderr, flush=True)
+            break
+        if max_rounds is not None and idx >= max_rounds:
+            print(f"RSI loop reached max_rounds={max_rounds}; exiting", file=sys.stderr, flush=True)
+            break
+        cfg = round_config(idx)
+        os.environ.update(cfg)
+        if smoke:  # keep validation rounds tiny; grid MAX_STEPS is for real rounds
+            os.environ["MAX_STEPS"] = os.environ.get("RSI_SMOKE_STEPS", "3")
+        print(f"=== RSI round {idx} start cfg={cfg} smoke={smoke} mode={os.environ.get('RSI_MODE', 'shadow')} ===",
+              file=sys.stderr, flush=True)
+        try:
+            report = run_round_fn(once=True, smoke=smoke) or {}
+            h, c = report.get("holdout", {}), report.get("canary", {})
+            print(f"=== RSI round {idx} done: proposed={report.get('proposed')} "
+                  f"degenerate={report.get('degenerate')} "
+                  f"holdout Δ={h.get('delta_pp')} p={h.get('p_value')} "
+                  f"canary Δ={c.get('delta_pp')} p={c.get('p_value')} ===",
+                  file=sys.stderr, flush=True)
+        except Exception as e:  # a bad round must not kill the loop
+            print(f"=== RSI round {idx} FAILED: {e!r} — continuing ===", file=sys.stderr, flush=True)
+            traceback.print_exc()
+        idx += 1
+        if should_stop(stop_file):
+            continue  # skip the sleep; the loop-top check will break out
+        sleep_fn(sleep_s)
+    return idx
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--once", action="store_true")
+    ap.add_argument("--forever", action="store_true", help="run rounds continuously (24/7 supervisor)")
     ap.add_argument("--smoke", action="store_true")
     args = ap.parse_args()
-    run_round(once=args.once, smoke=args.smoke)
+    if args.forever:
+        run_forever(smoke=(True if args.smoke else None))
+    else:
+        run_round(once=args.once, smoke=args.smoke)

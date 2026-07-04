@@ -12,6 +12,7 @@ base model for an end-to-end smoke test. All knobs are environment variables:
   EPOCHS       float                  (default 3)
   MAX_STEPS    int, -1 = use epochs   (default -1)
   LORA_R / LORA_ALPHA / LR / MAX_SEQ_LEN / BATCH / GRAD_ACCUM
+  SEED         int, seeds init + data shuffle  (default 42)
   MERGE        1 to also write a merged fp16 model to OUTPUT_DIR/merged
 
 Never Llama — base must be a Qwen (or other non-Llama) instruct model.
@@ -21,7 +22,7 @@ import os
 import torch
 from dataset_loader import load_local_or_hub
 from peft import LoraConfig
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 from trl import SFTConfig, SFTTrainer
 
 
@@ -39,6 +40,8 @@ def main():
     batch = int(env("BATCH", "1"))
     grad_accum = int(env("GRAD_ACCUM", "8"))
     lr = float(env("LR", "2e-4"))
+    seed = int(env("SEED", "42"))
+    set_seed(seed)  # reproducible per-round variation (weight init + data shuffle)
 
     cuda = torch.cuda.is_available()
     print(f"base={base}\ndataset={dataset_id}\nout={out_dir}\ncuda={cuda}")
@@ -78,6 +81,8 @@ def main():
         per_device_train_batch_size=batch,
         gradient_accumulation_steps=grad_accum,
         learning_rate=lr,
+        seed=seed,
+        data_seed=seed,
         warmup_ratio=0.05,
         logging_steps=5,
         save_strategy="epoch",
