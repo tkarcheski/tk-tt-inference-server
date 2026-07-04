@@ -22,15 +22,18 @@ import hashlib
 import os
 import subprocess
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-
 CONVERT_SCRIPT = os.environ.get(
     "RSI_LLAMACPP_CONVERT",
     "/home/tyler/AI/tools/llama.cpp/convert_hf_to_gguf.py",
 )
+# Absolute path to the training venv's interpreter (has torch/transformers,
+# which the converter imports). It is NOT resolved relative to this module: the
+# venv is git-ignored, so it exists only in the main checkout and is absent from
+# git worktree copies. Mirrors the same hardcoded path run_loop.py uses for the
+# train subprocess; override with RSI_CONVERT_PY on other hosts.
 CONVERT_PY = os.environ.get(
     "RSI_CONVERT_PY",
-    os.path.join(_HERE, ".venv-train", "bin", "python"),
+    "/home/tyler/AI/github/tk-tt-inference-server/finetune/.venv-train/bin/python",
 )
 
 
