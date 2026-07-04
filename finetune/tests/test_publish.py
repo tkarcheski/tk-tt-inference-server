@@ -66,8 +66,9 @@ def test_maybe_publish_builds_submodule_and_release(tmp_path, monkeypatch):
     cmds = [c["cmd"] for c in calls]
     assert any(c[:2] == ["git", "add"] for c in cmds)
     assert any(c[:2] == ["git", "commit"] for c in cmds)
-    assert any(c[:2] == ["git", "tag"] for c in cmds)
-    assert any(c[0] == "git" and "push" in c for c in cmds)
+    assert any(c[:3] == ["git", "tag", "-a"] for c in cmds)          # annotated (pushable)
+    assert any(c[:2] == ["git", "push"] and "HEAD" in c for c in cmds)
+    assert any(c[:2] == ["git", "push"] and "rsi-qwen-v1007-deadbeef" in c for c in cmds)  # tag pushed
     rel = next(c for c in cmds if c[:3] == ["gh", "release", "create"])
     assert "--repo" in rel and pub.FORK_REPO in rel
     assert "tenstorrent" not in " ".join(rel)          # never upstream

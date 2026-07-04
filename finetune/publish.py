@@ -79,8 +79,12 @@ def commit_to_submodule(gguf_path, report, version):
     tag = f"rsi-qwen-{version}"
     _run(["git", "add", "-A", rel], cwd=sub)
     _run(["git", "commit", "-m", f"publish rsi-qwen {version}"], cwd=sub)
-    _run(["git", "tag", "-f", tag], cwd=sub)
-    _run(["git", "push", "--follow-tags", "origin", "HEAD"], cwd=sub)
+    # Annotated tag + explicit tag push: `--follow-tags` skips lightweight tags,
+    # and the version tag is how consumers `git checkout` the model. Version is
+    # unique per round (seed+hash) so no force is needed.
+    _run(["git", "tag", "-a", tag, "-m", f"rsi-qwen {version}"], cwd=sub)
+    _run(["git", "push", "origin", "HEAD"], cwd=sub)
+    _run(["git", "push", "origin", tag], cwd=sub)
     return {"commit": _run(["git", "rev-parse", "HEAD"], cwd=sub), "tag": tag}
 
 
