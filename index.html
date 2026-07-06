@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RSI MODEL_TUNER — live status</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1117; --card:#1a1d27; --fg:#e7e9ee;
+          --mut:#9aa0ac; --line:#2a2e3a; --go:#3fb950; --hold:#f85149; --deg:#6e7681; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f6f8fa; --card:#fff; --fg:#1f2328; --mut:#656d76; --line:#d0d7de; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:960px; margin:0 auto; padding:24px 18px 60px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--mut); margin:0 0 20px; font-size:13.5px; }
+  .sub a { color:inherit; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+           gap:12px; margin-bottom:22px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          padding:14px 16px; }
+  .card .k { color:var(--mut); font-size:12px; text-transform:uppercase;
+             letter-spacing:.04em; }
+  .card .v { font-size:26px; font-weight:650; margin-top:4px; }
+  .chart { display:flex; align-items:flex-end; gap:3px; height:120px; padding:10px 0;
+           border-bottom:1px solid var(--line); margin-bottom:18px; overflow-x:auto; }
+  .bar { flex:0 0 auto; width:14px; border-radius:3px 3px 0 0; background:var(--deg);
+         min-height:2px; }
+  .tablewrap { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line);
+          white-space:nowrap; }
+  th { color:var(--mut); font-weight:600; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:20px; font-size:12px;
+          font-weight:600; }
+  .go   { background:rgba(63,185,80,.15);  color:var(--go); }
+  .hold { background:rgba(248,81,73,.15);   color:var(--hold); }
+  .deg  { background:rgba(110,118,129,.18); color:var(--deg); }
+  .foot { color:var(--mut); font-size:12.5px; margin-top:26px; }
+  .live { display:inline-block; width:8px; height:8px; border-radius:50%;
+          background:var(--go); margin-right:6px; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+</style></head>
+<body><div class="wrap">
+  <h1><span class="live"></span>RSI MODEL_TUNER — live status</h1>
+  <p class="sub" id="sub">Loading…</p>
+  <div class="cards" id="cards"></div>
+  <div class="chart" id="chart" title="Canary Δpp per round"></div>
+  <div class="tablewrap"><table id="tbl">
+    <thead><tr><th>Seed</th><th>Started</th><th>Holdout Δpp</th><th>p</th>
+      <th>Canary Δpp</th><th>p</th><th>Gate</th></tr></thead>
+    <tbody id="rows"></tbody></table></div>
+  <p class="foot" id="foot"></p>
+</div>
+<script>
+const fmt = v => (v==null?'—':(v>0?'+':'')+v);
+function pill(r){ if(r.degenerate) return '<span class="pill deg">degenerate</span>';
+  return r.proposed ? '<span class="pill go">proposed</span>'
+                    : '<span class="pill hold">held</span>'; }
+async function load(){
+  try{
+    const d = await (await fetch('./data.json?t='+Date.now())).json();
+    const s = d.summary;
+    document.getElementById('sub').innerHTML =
+      'Shadow-only self-improvement loop. Tuned Qwen vs. untuned base ('+
+      '<code>'+d.base_model+'</code>) on a frozen holdout+canary split, McNemar gate. '+
+      'Passing rounds are <b>proposed, never auto-promoted</b>. '+
+      '<a href="'+d.repo_url+'/blob/main/docs/rsi-loop.md">How it works ↗</a>';
+    const cards = [
+      ['Rounds', s.total_rounds],
+      ['Proposed', s.proposed],
+      ['Best canary Δ', fmt(s.best_canary_delta_pp)+' pp'],
+      ['Latest seed', s.latest_seed ?? '—'],
+    ];
+    document.getElementById('cards').innerHTML = cards.map(c=>
+      '<div class="card"><div class="k">'+c[0]+'</div><div class="v">'+c[1]+'</div></div>').join('');
+    // canary Δ bars (chronological), green if that round proposed
+    const graded = d.rounds.filter(r=>!r.degenerate);
+    const mx = Math.max(6, ...graded.map(r=>Math.abs(r.canary.delta_pp)));
+    document.getElementById('chart').innerHTML = graded.map(r=>{
+      const h = Math.round(Math.abs(r.canary.delta_pp)/mx*100);
+      const col = r.proposed ? 'var(--go)' : (r.canary.delta_pp<0?'var(--hold)':'var(--deg)');
+      return '<div class="bar" style="height:'+h+'%;background:'+col+'" title="seed '+
+             r.seed+': '+fmt(r.canary.delta_pp)+'pp"></div>'; }).join('');
+    document.getElementById('rows').innerHTML = d.rounds.slice().reverse().map(r=>
+      '<tr><td>'+r.seed+'</td><td>'+r.started+'</td>'+
+      '<td class="num">'+fmt(r.holdout.delta_pp)+'</td><td class="num">'+r.holdout.p_value+'</td>'+
+      '<td class="num">'+fmt(r.canary.delta_pp)+'</td><td class="num">'+r.canary.p_value+'</td>'+
+      '<td>'+pill(r)+'</td></tr>').join('');
+    document.getElementById('foot').textContent =
+      'Generated '+d.generated_at+' · auto-refreshes every 5 min · '+
+      s.graded_rounds+' graded of '+s.total_rounds+' rounds';
+  }catch(e){ document.getElementById('sub').textContent = 'Could not load data.json: '+e; }
+}
+load(); setInterval(load, 300000);
+</script>
+</body></html>

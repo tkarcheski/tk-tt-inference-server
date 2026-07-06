@@ -1,0 +1,511 @@
+{
+  "generated_at": "2026-07-06 13:19 UTC",
+  "pages_url": "https://tkarcheski.github.io/tk-tt-inference-server/",
+  "repo_url": "https://github.com/tkarcheski/tk-tt-inference-server",
+  "base_model": "qwen2.5:3b",
+  "shadow_only": true,
+  "summary": {
+    "total_rounds": 19,
+    "graded_rounds": 17,
+    "proposed": 0,
+    "best_canary_delta_pp": -5.0,
+    "latest_seed": 1013,
+    "latest_started": "2026-07-06T10:41:03"
+  },
+  "rounds": [
+    {
+      "seed": null,
+      "started": "2026-07-04T00:10:58",
+      "tuned_id": "6042ff4f-8f1e-4cfe-9c50-3f495c048192",
+      "base_id": "3f5ab316-8f41-4793-8a85-714c5e6f0236",
+      "lora_hash": "96688803",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 38.7,
+        "tuned_pass": 58.1,
+        "delta_pp": 19.4,
+        "p_value": 0.0898,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 40.0,
+        "tuned_pass": 15.0,
+        "delta_pp": -25.0,
+        "p_value": 0.9805,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": null,
+      "started": "2026-07-04T01:57:07",
+      "tuned_id": "9d7f54c2-1ebe-4e47-9c4f-4a65d5c5a336",
+      "base_id": "bc5611eb-403e-43b9-8e91-cec51a761935",
+      "lora_hash": "c9d5e5ae",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 38.7,
+        "tuned_pass": 58.1,
+        "delta_pp": 19.4,
+        "p_value": 0.0898,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 40.0,
+        "tuned_pass": 15.0,
+        "delta_pp": -25.0,
+        "p_value": 0.9805,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1000,
+      "started": "2026-07-04T03:36:02",
+      "tuned_id": "16a71204-8288-4b09-996f-bae324c37723",
+      "base_id": "0aa6ab70-6e2a-44a5-ae2e-d8c3dbbc4195",
+      "lora_hash": "81ed6cf7",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 0,
+        "base_pass": 0,
+        "tuned_pass": 0,
+        "delta_pp": 0,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "canary": {
+        "n": 0,
+        "base_pass": 0,
+        "tuned_pass": 0,
+        "delta_pp": 0,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "degenerate": true,
+      "proposed": false
+    },
+    {
+      "seed": 1000,
+      "started": "2026-07-04T06:07:28",
+      "tuned_id": "94fbcbfb-5906-4ca3-8cfb-622f49d37bcf",
+      "base_id": "c4434f7d-88f2-49e9-a6e7-4536e94fa73b",
+      "lora_hash": "d2e1eb2f",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 45.2,
+        "tuned_pass": 67.7,
+        "delta_pp": 22.6,
+        "p_value": 0.0327,
+        "passes": true
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 70.0,
+        "delta_pp": -10.0,
+        "p_value": 0.9375,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1001,
+      "started": "2026-07-04T15:27:05",
+      "tuned_id": "df0489ef-03a3-446a-8f5a-8c39c52a5340",
+      "base_id": "feb64e33-b975-47d7-b7c3-7745fc44027e",
+      "lora_hash": "31f9d15e",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 45.2,
+        "tuned_pass": 80.6,
+        "delta_pp": 35.5,
+        "p_value": 0.0017,
+        "passes": true
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 75.0,
+        "delta_pp": -5.0,
+        "p_value": 0.7734,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1000,
+      "started": "2026-07-04T18:32:13",
+      "tuned_id": "5a4d0ac0-999b-4b3f-9231-248b995ca171",
+      "base_id": "70deb930-a3c6-4413-bd99-ad0ab4d6a998",
+      "lora_hash": "df77614e",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 45.2,
+        "tuned_pass": 58.1,
+        "delta_pp": 12.9,
+        "p_value": 0.1094,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 70.0,
+        "delta_pp": -10.0,
+        "p_value": 0.9375,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1001,
+      "started": "2026-07-04T22:26:46",
+      "tuned_id": "fde69d1e-f55e-424d-9580-214ae4f841ee",
+      "base_id": "decba2e0-68f1-4fc6-93b0-d87cfd19839f",
+      "lora_hash": "e33bed29",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 45.2,
+        "tuned_pass": 54.8,
+        "delta_pp": 9.7,
+        "p_value": 0.2266,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 60.0,
+        "delta_pp": -20.0,
+        "p_value": 0.9844,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1002,
+      "started": "2026-07-05T02:07:02",
+      "tuned_id": "17a05b18-0ff3-46f4-8578-7c3a32345331",
+      "base_id": "97dfbed0-a7de-49bf-b30c-3b8dcdba8d02",
+      "lora_hash": "ad484fd0",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 77.4,
+        "tuned_pass": 48.4,
+        "delta_pp": -29.0,
+        "p_value": 0.9995,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 70.0,
+        "delta_pp": -10.0,
+        "p_value": 0.9375,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1003,
+      "started": "2026-07-05T05:24:12",
+      "tuned_id": "a7949d92-62e9-4b65-b358-c1918df5ae5e",
+      "base_id": "a1ea31dd-2608-4ee8-946c-d4f3603259a9",
+      "lora_hash": "0818426e",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 45.2,
+        "tuned_pass": 41.9,
+        "delta_pp": -3.2,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 65.0,
+        "delta_pp": -15.0,
+        "p_value": 0.9688,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1004,
+      "started": "2026-07-05T09:57:06",
+      "tuned_id": "93d31be6-2e0e-40dd-8843-b4628a52802a",
+      "base_id": "2618b18c-9841-4042-b72e-4d2d96f4487d",
+      "lora_hash": "e183d746",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 45.2,
+        "tuned_pass": 58.1,
+        "delta_pp": 12.9,
+        "p_value": 0.1094,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 55.0,
+        "delta_pp": -25.0,
+        "p_value": 0.9922,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1005,
+      "started": "2026-07-05T14:26:33",
+      "tuned_id": "5ea1ac5f-0e5b-4a3e-90f2-d95d1a45a4e8",
+      "base_id": "da99c406-a4dc-464b-b937-f553c38e9bff",
+      "lora_hash": "2744ff73",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 77.4,
+        "tuned_pass": 54.8,
+        "delta_pp": -22.6,
+        "p_value": 0.998,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 45.0,
+        "delta_pp": -35.0,
+        "p_value": 0.998,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1006,
+      "started": "2026-07-05T17:24:55",
+      "tuned_id": "f79b78e5-e594-41bf-8634-f018715613d5",
+      "base_id": "60632420-9562-4e4c-9d45-cd82e97bfa60",
+      "lora_hash": "0eddeb7d",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 77.4,
+        "tuned_pass": 58.1,
+        "delta_pp": -19.4,
+        "p_value": 0.9961,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 65.0,
+        "delta_pp": -15.0,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1007,
+      "started": "2026-07-05T19:15:57",
+      "tuned_id": "9af66d49-4044-4ca4-9c0d-d61cf47b93a9",
+      "base_id": "63dc52fc-2969-4d6e-9e8b-12e13f89e098",
+      "lora_hash": "bca55302",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 77.4,
+        "tuned_pass": 54.8,
+        "delta_pp": -22.6,
+        "p_value": 0.998,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 55.0,
+        "delta_pp": -25.0,
+        "p_value": 0.9922,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1008,
+      "started": "2026-07-05T20:35:15",
+      "tuned_id": "c0cbc769-5437-47ca-8c51-d973beae40a1",
+      "base_id": "706b7234-da54-4a34-964d-2062cf0e14d0",
+      "lora_hash": "ec3b2ee6",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 77.4,
+        "tuned_pass": 58.1,
+        "delta_pp": -19.4,
+        "p_value": 0.9961,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 60.0,
+        "delta_pp": -20.0,
+        "p_value": 0.9844,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1009,
+      "started": "2026-07-05T22:14:23",
+      "tuned_id": "4a0d5f8e-c1e9-4010-92e7-394b57aabf90",
+      "base_id": "9071b4aa-63b3-400a-9acd-b2f86b8f3fc2",
+      "lora_hash": "6aab6fc3",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 77.4,
+        "tuned_pass": 54.8,
+        "delta_pp": -22.6,
+        "p_value": 0.998,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 65.0,
+        "delta_pp": -15.0,
+        "p_value": 0.9688,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1010,
+      "started": "2026-07-06T01:07:50",
+      "tuned_id": "1b07356d-03e2-487c-a840-c0d50b87600d",
+      "base_id": "dd8c892a-f40b-4350-8a41-abdb4307a709",
+      "lora_hash": "c450967e",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 45.2,
+        "tuned_pass": 58.1,
+        "delta_pp": 12.9,
+        "p_value": 0.1094,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 65.0,
+        "delta_pp": -15.0,
+        "p_value": 0.9688,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1011,
+      "started": "2026-07-06T04:07:32",
+      "tuned_id": "f6ef17cb-1276-4696-8149-6f865e8f983c",
+      "base_id": "f6b8b8e3-ab2d-467c-ada7-6ca0aa7fcd00",
+      "lora_hash": "8b4094b1",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 77.4,
+        "tuned_pass": 38.7,
+        "delta_pp": -38.7,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 65.0,
+        "delta_pp": -15.0,
+        "p_value": 0.9375,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1012,
+      "started": "2026-07-06T06:34:58",
+      "tuned_id": "ec48c10d-8c05-46c7-aa46-d8316cb0dd66",
+      "base_id": "ffec2bf4-bfe6-4e4d-a8ba-5a5d9a890ef7",
+      "lora_hash": "001ec238",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 45.2,
+        "tuned_pass": 41.9,
+        "delta_pp": -3.2,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 65.0,
+        "delta_pp": -15.0,
+        "p_value": 0.9688,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1013,
+      "started": "2026-07-06T10:41:03",
+      "tuned_id": "ff21599f-f63f-45f9-9cba-fd212a881a3a",
+      "base_id": "e2c9c0a2-6e6a-43e2-af34-6164258e79a4",
+      "lora_hash": "c7d64c56",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 14,
+        "base_pass": 100.0,
+        "tuned_pass": 85.7,
+        "delta_pp": -14.3,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "canary": {
+        "n": 0,
+        "base_pass": 0,
+        "tuned_pass": 0,
+        "delta_pp": 0,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "degenerate": true,
+      "proposed": false
+    }
+  ]
+}
