@@ -157,6 +157,45 @@ every publish is immutably pinned in the registry by tag. Rollback:
 
 ---
 
+## Public status dashboard (`publish_status.py`, opt-in)
+
+The loop's results live in the local warehouse + journal. `publish_status.py`
+makes them **world-visible** on GitHub Pages so anyone can watch the loop:
+
+**Live:** <https://tkarcheski.github.io/tk-tt-inference-server/>
+
+It **recomputes** every round's gate outcome from the stored `test_results` using
+the same statistic the live gate uses (`gate.mcnemar_from_pairs`), so the page is
+authoritative and covers all history — not a separate log that can drift. It
+renders three artifacts and commits them to the **`gh-pages`** branch of the
+public fork (Pages-only; **never main**):
+
+- **`data.json`** — full round history + summary (machine-readable).
+- **`index.html`** — a self-contained dashboard (no external assets) that
+  re-fetches `data.json` every 5 min, so an open tab tracks the loop live.
+- **`README.md`** — a Markdown leaderboard that renders on GitHub directly.
+
+Only aggregate, non-sensitive fields are published (seed, timestamps, short
+hashes, per-pool pass rates + McNemar Δ/p, gate decision). No DB credentials,
+tokens, paths, prompts, or grader rationales leave the box. An idle refresh
+(same rounds, newer clock) is a **no-op** — the timestamp alone never produces a
+commit — so a frequent refresher does not spam `gh-pages`.
+
+Two ways to keep it fresh (choose one; both opt-in, default off):
+
+1. **Per-round hook** — `publish_status.maybe_publish_status(report)` fires from
+   `run_round` when `RSI_PUBLISH_STATUS == "1"`; the dashboard refreshes once per
+   round (its natural cadence).
+2. **Standalone / timer** — `python publish_status.py` always publishes; drive it
+   from a `systemd --user` timer / cron for a tighter refresh independent of the
+   round. Needs a checkout of the fork on `gh-pages` at `RSI_STATUS_DIR` whose
+   `origin` is the fork.
+
+Rollback: the branch is disposable — disable Pages (or delete `gh-pages`) to take
+it down; no model or endpoint is ever touched.
+
+---
+
 ## The 24/7 supervisor (`run_loop.py --forever` + `scripts/rsi/`)
 
 `run_forever()` runs rounds continuously:
@@ -222,6 +261,9 @@ for operations.
 | `RSI_OPEN_PR` | *(unset)* | `1` allows draft-PR proposals (still triple-gated). |
 | `RSI_PUBLISH` | *(unset)* | `1` arms the publish pipeline (registry push + GitHub release on a passing gate). |
 | `RSI_MODELS_SUBMODULE` | `ollama-models` | Path to the git-LFS model-registry submodule. |
+| `RSI_PUBLISH_STATUS` | *(unset)* | `1` arms the public status dashboard (refresh `gh-pages` each round). |
+| `RSI_STATUS_DIR` | `~/AI/rsi-status-pages` | Fork checkout on `gh-pages` that `publish_status.py` commits to. |
+| `RSI_STATUS_BRANCH` | `gh-pages` | Pages branch the dashboard is pushed to (never main). |
 | `RSI_REPEATS` | `1` | Eval repeats per suite. |
 | `MAX_STEPS` / `SEED` / `LORA_R` / `LORA_ALPHA` / `LR` | grid-driven | Per-round `train_lora` knobs (set by `round_config`). |
 
