@@ -1,16 +1,25 @@
 {
-  "generated_at": "2026-07-06 13:19 UTC",
+  "generated_at": "2026-07-07 01:17 UTC",
   "pages_url": "https://tkarcheski.github.io/tk-tt-inference-server/",
   "repo_url": "https://github.com/tkarcheski/tk-tt-inference-server",
+  "doc_url": "https://github.com/tkarcheski/tk-tt-inference-server/blob/gh-pages/rsi-loop.md",
   "base_model": "qwen2.5:3b",
+  "models": {
+    "base_ollama": "qwen2.5:3b",
+    "base_hf": "Qwen/Qwen2.5-3B-Instruct",
+    "base_hf_url": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct",
+    "tuned_registry": "tkarcheski/rsi-ollama-models",
+    "tuned_registry_url": "https://github.com/tkarcheski/rsi-ollama-models",
+    "registry_private": true
+  },
   "shadow_only": true,
   "summary": {
-    "total_rounds": 19,
-    "graded_rounds": 17,
+    "total_rounds": 22,
+    "graded_rounds": 20,
     "proposed": 0,
     "best_canary_delta_pp": -5.0,
-    "latest_seed": 1013,
-    "latest_started": "2026-07-06T10:41:03"
+    "latest_seed": 1016,
+    "latest_started": "2026-07-06T23:25:26"
   },
   "rounds": [
     {
@@ -489,10 +498,88 @@
       "lora_hash": "c7d64c56",
       "train_pool_hash": "97692501",
       "holdout": {
+        "n": 31,
+        "base_pass": 45.2,
+        "tuned_pass": 38.7,
+        "delta_pp": -6.5,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 65.0,
+        "delta_pp": -15.0,
+        "p_value": 0.9688,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1014,
+      "started": "2026-07-06T14:57:50",
+      "tuned_id": "7395bc9d-755f-494a-9c6d-cc20a72076dd",
+      "base_id": "4144078f-9e16-4382-9710-db24bf6eea88",
+      "lora_hash": "997b287a",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 45.2,
+        "tuned_pass": 41.9,
+        "delta_pp": -3.2,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 70.0,
+        "delta_pp": -10.0,
+        "p_value": 0.9375,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1015,
+      "started": "2026-07-06T19:19:16",
+      "tuned_id": "34abeda1-8032-4d13-b817-597c68825e0a",
+      "base_id": "e8ed95f5-63e5-43f2-b8a0-fe775d1b3f05",
+      "lora_hash": "6ebd2c73",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 45.2,
+        "tuned_pass": 38.7,
+        "delta_pp": -6.5,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 60.0,
+        "delta_pp": -20.0,
+        "p_value": 0.9844,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1016,
+      "started": "2026-07-06T23:25:26",
+      "tuned_id": "1df28a45-5a41-4c71-b41b-2246844cabdb",
+      "base_id": "b27cc7c5-5855-4184-a6ba-01efb2f848c5",
+      "lora_hash": "40d835ee",
+      "train_pool_hash": "97692501",
+      "holdout": {
         "n": 14,
         "base_pass": 100.0,
-        "tuned_pass": 85.7,
-        "delta_pp": -14.3,
+        "tuned_pass": 92.9,
+        "delta_pp": -7.1,
         "p_value": 1.0,
         "passes": false
       },

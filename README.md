@@ -1,23 +1,31 @@
 # RSI MODEL_TUNER — live shadow-loop status
 
-> Auto-generated every round by the 24/7 [RSI MODEL_TUNER loop](https://github.com/tkarcheski/tk-tt-inference-server/blob/main/docs/rsi-loop.md). **Shadow-only**: the loop LoRA-fine-tunes a small Qwen on robotframework-chat suites, evaluates the tuned model against the untuned base on a frozen holdout+canary split, and runs a McNemar promotion gate. Passing rounds are *proposed*, never auto-promoted — a human decides.
+> Auto-generated every round by the 24/7 [RSI MODEL_TUNER loop](https://github.com/tkarcheski/tk-tt-inference-server/blob/gh-pages/rsi-loop.md). **Shadow-only**: the loop LoRA-fine-tunes a small Qwen on robotframework-chat suites, evaluates the tuned model against the untuned base on a frozen holdout+canary split, and runs a McNemar promotion gate. Passing rounds are *proposed*, never auto-promoted — a human decides.
 
 **Live dashboard:** https://tkarcheski.github.io/tk-tt-inference-server/
 
+## Models
+
+- **Base (control):** [`Qwen/Qwen2.5-3B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct) on Hugging Face, served as Ollama `qwen2.5:3b`.
+- **Tuned (per round):** a LoRA fine-tune of the base, merged + served as Ollama `rsi-qwen:round`.
+- **Published tuned models:** [`tkarcheski/rsi-ollama-models`](https://github.com/tkarcheski/rsi-ollama-models) — git-LFS registry (private); a round is pushed there only when it passes the gate.
+
 ## Summary
 
-- Base model (paired control): `qwen2.5:3b`
-- Rounds run: **19** (17 graded)
+- Rounds run: **22** (20 graded)
 - Rounds that passed the gate (proposed): **0**
 - Best canary Δ so far: **-5.0 pp**
-- Latest round: seed `1013` at 2026-07-06T10:41:03
-- Generated: 2026-07-06 13:19 UTC
+- Latest round: seed `1016` at 2026-07-06T23:25:26
+- Generated: 2026-07-07 01:17 UTC
 
 ## Rounds (most recent first)
 
 | Seed | Started | Holdout Δpp (p) | Canary Δpp (p) | Gate |
 |---:|:--|:--|:--|:--|
-| 1013 | 2026-07-06T10:41:03 | -14.3 (p=1.0) | +0 (p=1.0) | ⚪ degenerate |
+| 1016 | 2026-07-06T23:25:26 | -7.1 (p=1.0) | +0 (p=1.0) | ⚪ degenerate |
+| 1015 | 2026-07-06T19:19:16 | -6.5 (p=1.0) | -20.0 (p=0.9844) | 🔴 held |
+| 1014 | 2026-07-06T14:57:50 | -3.2 (p=1.0) | -10.0 (p=0.9375) | 🔴 held |
+| 1013 | 2026-07-06T10:41:03 | -6.5 (p=1.0) | -15.0 (p=0.9688) | 🔴 held |
 | 1012 | 2026-07-06T06:34:58 | -3.2 (p=1.0) | -15.0 (p=0.9688) | 🔴 held |
 | 1011 | 2026-07-06T04:07:32 | -38.7 (p=1.0) | -15.0 (p=0.9375) | 🔴 held |
 | 1010 | 2026-07-06T01:07:50 | +12.9 (p=0.1094) | -15.0 (p=0.9688) | 🔴 held |

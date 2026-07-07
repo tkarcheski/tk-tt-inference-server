@@ -46,6 +46,7 @@
   <h1><span class="live"></span>RSI MODEL_TUNER — live status</h1>
   <p class="sub" id="sub">Loading…</p>
   <div class="cards" id="cards"></div>
+  <p class="foot" id="models" style="margin-top:-8px;margin-bottom:18px"></p>
   <div class="chart" id="chart" title="Canary Δpp per round"></div>
   <div class="tablewrap"><table id="tbl">
     <thead><tr><th>Seed</th><th>Started</th><th>Holdout Δpp</th><th>p</th>
@@ -66,7 +67,13 @@ async function load(){
       'Shadow-only self-improvement loop. Tuned Qwen vs. untuned base ('+
       '<code>'+d.base_model+'</code>) on a frozen holdout+canary split, McNemar gate. '+
       'Passing rounds are <b>proposed, never auto-promoted</b>. '+
-      '<a href="'+d.repo_url+'/blob/main/docs/rsi-loop.md">How it works ↗</a>';
+      '<a href="'+d.doc_url+'">How it works ↗</a>';
+    const m = d.models;
+    document.getElementById('models').innerHTML =
+      '<b>Models:</b> base <a href="'+m.base_hf_url+'"><code>'+m.base_hf+'</code></a> '+
+      '(Ollama <code>'+m.base_ollama+'</code>) · tuned <code>rsi-qwen:round</code> · '+
+      'published to <a href="'+m.tuned_registry_url+'"><code>'+m.tuned_registry+'</code></a>'+
+      (m.registry_private ? ' (private)' : '');
     const cards = [
       ['Rounds', s.total_rounds],
       ['Proposed', s.proposed],
