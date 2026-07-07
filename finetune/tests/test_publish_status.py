@@ -91,6 +91,37 @@ def test_build_data_summary_counts():
     assert s["best_canary_delta_pp"] == 7.0        # best among graded
     assert s["latest_seed"] == 1004
     assert data["shadow_only"] is True
+    assert data["baseline"] is None                # nothing promoted
+    assert s["baselines_promoted"] == 0
+
+
+# ---- rolling baseline (Ollama champion) --------------------------------------
+
+def _baseline(current=True):
+    return {"version": "v1002-deadbeef", "ollama_ref": "tkarcheski/rsi-qwen:3b-latest",
+            "holdout_delta_pp": 22.0, "canary_delta_pp": 7.0,
+            "pushed_at": "2026-07-05T13:00:00", "is_current": current,
+            "cluster_status": "pending"}
+
+
+def test_build_data_surfaces_current_baseline():
+    data = ps.build_data(_rounds(), "t", "qwen2.5:3b",
+                         baselines=[_baseline(current=True)])
+    assert data["baseline"]["version"] == "v1002-deadbeef"
+    assert data["summary"]["baselines_promoted"] == 1
+    assert data["models"]["ollama_baseline"] == "tkarcheski/rsi-qwen:3b-latest"
+
+
+def test_readme_shows_baseline_when_promoted():
+    data = ps.build_data(_rounds(), "t", "qwen2.5:3b", baselines=[_baseline()])
+    md = ps.render_readme(data)
+    assert "🏆 **Current baseline:** `v1002-deadbeef`" in md
+    assert "tkarcheski/rsi-qwen:3b-latest" in md
+
+
+def test_readme_shows_no_baseline_message_when_none():
+    md = ps.render_readme(ps.build_data(_rounds(), "t", "qwen2.5:3b"))
+    assert "No baseline promoted yet" in md
 
 
 # ---- signature ignores the clock (idle-tick no-op) --------------------------

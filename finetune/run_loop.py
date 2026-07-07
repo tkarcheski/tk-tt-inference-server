@@ -11,7 +11,7 @@ explicitly taken out of shadow mode via env, and nothing in this file acts on
 that beyond the check itself.
 """
 import argparse, contextlib, json, os, subprocess, sys, time, traceback, uuid, pathlib
-import rsi_common, split_suites, serve_ollama, eval_rfc, import_results, gate, publish, publish_status
+import rsi_common, split_suites, serve_ollama, eval_rfc, import_results, gate, publish, publish_status, publish_ollama
 
 FT = pathlib.Path(__file__).parent
 BASE_MODEL = os.environ.get("BASE_MODEL", "Qwen/Qwen2.5-3B-Instruct")
@@ -20,6 +20,12 @@ REPEATS = int(os.environ.get("RSI_REPEATS", "1"))
 def can_promote():
     return os.environ.get("RSI_MODE", "shadow") == "live" and \
            os.environ.get("RSI_AGENTS_ENABLED", "true") != "false"
+
+def base_arm_tag():
+    """The base (control) arm for this round: the rolling Ollama champion once one
+    has been promoted (RSI_PUSH_OLLAMA path), else the pinned stock base. So the
+    tuned model must beat the *current* baseline each round (self-improving ratchet)."""
+    return publish_ollama.current_champion() or os.environ.get("RSI_BASE_TAG", "qwen2.5:3b")
 
 def maybe_open_pr(report):
     """SHADOW-ONLY: open a DRAFT PR proposal iff the round proposed a promotion,
@@ -107,9 +113,11 @@ def run_round(once=True, smoke=False):
     merged = str(FT / "out" / "lora-qwen" / "merged")
     lora_hash = serve_ollama.adapter_hash(str(FT / "out" / "lora-qwen"))
 
-    # 3) serve tuned via Ollama (base arm reuses a pinned base tag)
+    # 3) serve tuned via Ollama. The base arm is the rolling champion once one has
+    # been promoted (RSI_PUSH_OLLAMA path); otherwise the pinned stock base. So the
+    # tuned model must beat the *current* baseline each round (self-improving ratchet).
     tuned_tag = serve_ollama.create_tag(merged, "rsi-qwen:round")
-    base_tag = os.environ.get("RSI_BASE_TAG", "qwen2.5:3b")
+    base_tag = base_arm_tag()
 
     # 4) provenance rows (base is a frozen reference each round). Record the
     # per-round training seed so 24/7 rounds are distinguishable experiments.
@@ -145,6 +153,9 @@ def run_round(once=True, smoke=False):
     report["proposed"] = bool(canary["passes"] and holdout["passes"])
     maybe_open_pr(report)
     publish.maybe_publish(report, merged)  # opt-in RSI_PUBLISH=1; no-op unless proposed
+    # opt-in RSI_PUSH_OLLAMA=1: on a passing gate, push tuned -> tkarcheski/rsi-qwen:3b-latest
+    # and roll it in as the new baseline (only if the push succeeds).
+    publish_ollama.maybe_push_ollama(report, tuned_tag)
     publish_status.maybe_publish_status(report)  # opt-in RSI_PUBLISH_STATUS=1; refresh public dashboard
     print(json.dumps(report, indent=2))
     return report

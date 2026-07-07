@@ -42,6 +42,7 @@ BASE_HF = "Qwen/Qwen2.5-3B-Instruct"
 BASE_HF_URL = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct"
 TUNED_REGISTRY = "tkarcheski/rsi-ollama-models"          # git-LFS registry (private)
 TUNED_REGISTRY_URL = "https://github.com/tkarcheski/rsi-ollama-models"
+OLLAMA_BASELINE = "tkarcheski/rsi-qwen:3b-latest"        # rolling champion on the Ollama registry
 STATUS_BRANCH = os.environ.get("RSI_STATUS_BRANCH", "gh-pages")
 STATUS_REMOTE = os.environ.get("RSI_STATUS_REMOTE", "origin")
 PAGES_URL = os.environ.get("RSI_STATUS_PAGES_URL",
@@ -100,7 +101,31 @@ def collect_rounds():
     return rounds
 
 
-def build_data(rounds, generated_at, base_model, doc_sha=None):
+def collect_baselines():
+    """Champions pushed to the Ollama registry (`rsi.baselines`), newest first.
+    The is_current row is what the loop's next round must beat + what the larger
+    RFC-chat cluster validates. Empty list if none promoted (or table absent)."""
+    try:
+        with contextlib.closing(rsi_common.connect()) as c, c.cursor() as cur:
+            cur.execute(
+                "select version, ollama_ref, holdout_delta_pp, canary_delta_pp, "
+                "       to_char(pushed_at,'YYYY-MM-DD\"T\"HH24:MI:SS'), is_current, "
+                "       cluster_status "
+                "from rsi.baselines order by pushed_at desc")
+            rows = cur.fetchall()
+    except Exception as e:
+        print(f"baselines: warehouse read failed ({e!r}); omitting", file=sys.stderr)
+        return []
+    return [{"version": v, "ollama_ref": ref,
+             "holdout_delta_pp": float(h) if h is not None else None,
+             "canary_delta_pp": float(cd) if cd is not None else None,
+             "pushed_at": at, "is_current": cur_, "cluster_status": cs}
+            for v, ref, h, cd, at, cur_, cs in rows]
+
+
+def build_data(rounds, generated_at, base_model, doc_sha=None, baselines=None):
+    baselines = baselines or []
+    current = next((b for b in baselines if b["is_current"]), None)
     graded = [r for r in rounds if not r["degenerate"]]
     best = max((r["canary"]["delta_pp"] for r in graded), default=None)
     return {
@@ -117,6 +142,7 @@ def build_data(rounds, generated_at, base_model, doc_sha=None):
             "base_hf": BASE_HF, "base_hf_url": BASE_HF_URL,
             "tuned_registry": TUNED_REGISTRY, "tuned_registry_url": TUNED_REGISTRY_URL,
             "registry_private": True,
+            "ollama_baseline": OLLAMA_BASELINE,
         },
         "shadow_only": True,
         "summary": {
@@ -126,7 +152,12 @@ def build_data(rounds, generated_at, base_model, doc_sha=None):
             "best_canary_delta_pp": best,
             "latest_seed": rounds[-1]["seed"] if rounds else None,
             "latest_started": rounds[-1]["started"] if rounds else None,
+            "baselines_promoted": len(baselines),
         },
+        # The rolling champion pushed to the Ollama registry (self-improving
+        # baseline); None until a round clears the gate + pushes successfully.
+        "baseline": current,
+        "baselines": baselines,
         "rounds": rounds,
     }
 
@@ -155,10 +186,29 @@ def render_readme(data):
         f"— git-LFS registry{' (private)' if m['registry_private'] else ''}; a round is "
         "pushed there only when it passes the gate.",
         "",
+        "## Rolling baseline (`" + m["ollama_baseline"] + "`)",
+        "",
+    ]
+    b = data["baseline"]
+    if b:
+        lines += [
+            f"🏆 **Current baseline:** `{b['version']}` — canary Δ {b['canary_delta_pp']}pp, "
+            f"pushed {b['pushed_at']}, cluster validation: **{b['cluster_status']}**.",
+            "",
+            f"The larger RFC-chat cluster pulls it (`ollama pull {m['ollama_baseline']}`); "
+            "each new round now tunes against **this** champion, so the bar ratchets up.",
+        ]
+    else:
+        lines.append(
+            f"No baseline promoted yet — the first round to clear the gate is pushed to "
+            f"`{m['ollama_baseline']}` and becomes the rolling baseline the loop must beat.")
+    lines += [
+        "",
         "## Summary",
         "",
         f"- Rounds run: **{s['total_rounds']}** ({s['graded_rounds']} graded)",
         f"- Rounds that passed the gate (proposed): **{s['proposed']}**",
+        f"- Baselines promoted to `{m['ollama_baseline']}`: **{s['baselines_promoted']}**",
         f"- Best canary Δ so far: **{s['best_canary_delta_pp']} pp**",
         f"- Latest round: seed `{s['latest_seed']}` at {s['latest_started']}",
         f"- Generated: {data['generated_at']}",
@@ -216,6 +266,11 @@ _HTML = """<!doctype html>
   .card .k { color:var(--mut); font-size:12px; text-transform:uppercase;
              letter-spacing:.04em; }
   .card .v { font-size:26px; font-weight:650; margin-top:4px; }
+  .banner { border:1px solid var(--line); border-radius:10px; padding:12px 16px;
+            margin:0 0 18px; background:var(--card); font-size:13.5px; line-height:1.6; }
+  .banner.mutbg { color:var(--mut); }
+  .banner code { font-size:12.5px; }
+  .mut { color:var(--mut); }
   .chart { display:flex; align-items:flex-end; gap:3px; height:120px; padding:10px 0;
            border-bottom:1px solid var(--line); margin-bottom:18px; overflow-x:auto; }
   .bar { flex:0 0 auto; width:14px; border-radius:3px 3px 0 0; background:var(--deg);
@@ -240,7 +295,8 @@ _HTML = """<!doctype html>
   <h1><span class="live"></span>RSI MODEL_TUNER — live status</h1>
   <p class="sub" id="sub">Loading…</p>
   <div class="cards" id="cards"></div>
-  <p class="foot" id="models" style="margin-top:-8px;margin-bottom:18px"></p>
+  <p class="foot" id="models" style="margin-top:-8px;margin-bottom:10px"></p>
+  <div id="baseline"></div>
   <div class="chart" id="chart" title="Canary Δpp per round"></div>
   <div class="tablewrap"><table id="tbl">
     <thead><tr><th>Seed</th><th>Started</th><th>Holdout Δpp</th><th>p</th>
@@ -268,6 +324,17 @@ async function load(){
       '(Ollama <code>'+m.base_ollama+'</code>) · tuned <code>rsi-qwen:round</code> · '+
       'published to <a href="'+m.tuned_registry_url+'"><code>'+m.tuned_registry+'</code></a>'+
       (m.registry_private ? ' (private)' : '');
+    // rolling champion pushed to the Ollama registry for the larger RFC-chat cluster
+    const b = d.baseline;
+    document.getElementById('baseline').innerHTML = b
+      ? '<div class="banner"><b>🏆 Current baseline (rolling champion):</b> '+
+        '<code>'+m.ollama_baseline+'</code> = '+b.version+' · canary Δ '+fmt(b.canary_delta_pp)+
+        'pp · pushed '+b.pushed_at+' · cluster: <b>'+b.cluster_status+'</b>'+
+        '<br><span class="mut">The larger RFC-chat cluster validates this via '+
+        '<code>ollama pull '+m.ollama_baseline+'</code>; the loop now tunes against it.</span></div>'
+      : '<div class="banner mutbg"><b>No baseline promoted yet.</b> '+
+        'The first round to clear the gate is pushed to <code>'+m.ollama_baseline+
+        '</code> and becomes the rolling baseline the loop must beat.</div>';
     const cards = [
       ['Rounds', s.total_rounds],
       ['Proposed', s.proposed],
@@ -300,7 +367,7 @@ load(); setInterval(load, 300000);
 """
 
 
-_TEMPLATE_VERSION = "2"  # bump when index.html / README layout changes
+_TEMPLATE_VERSION = "3"  # bump when index.html / README layout changes
 
 
 def _round_signature(data):
@@ -382,12 +449,14 @@ def publish_now(status_dir=None, generated_at=None,
     base_model = base_model or os.environ.get("RSI_BASE_TAG", "qwen2.5:3b")
     os.makedirs(status_dir, exist_ok=True)
     rounds = collect_rounds()
+    baselines = collect_baselines()
     doc = _doc_source()
     doc_sha = None
     if doc:
         with open(doc, "rb") as fh:
             doc_sha = hashlib.sha256(fh.read()).hexdigest()[:12]
-    data = build_data(rounds, generated_at, base_model, doc_sha=doc_sha)
+    data = build_data(rounds, generated_at, base_model, doc_sha=doc_sha,
+                      baselines=baselines)
     result = {"rounds": len(rounds), "status_dir": status_dir,
               "proposed": data["summary"]["proposed"]}
     # Idle-tick fast path: identical round data -> leave files (and their clock)

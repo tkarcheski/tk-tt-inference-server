@@ -42,3 +42,23 @@ CREATE TABLE IF NOT EXISTS rsi.publications (
   created_at        timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tuned_id)
 );
+
+-- The rolling "champion" baseline pushed to the Ollama registry
+-- (tkarcheski/rsi-qwen:3b-latest). A round lands here only when it clears the
+-- promotion gate AND the ollama push succeeds. The is_current row is the baseline
+-- the loop's next round must beat (self-improving ratchet). cluster_status tracks
+-- large-cluster (RFC-chat) validation feedback.
+CREATE TABLE IF NOT EXISTS rsi.baselines (
+  version           text PRIMARY KEY,            -- v{seed}-{adapter_hash[:8]}
+  tuned_id          uuid NOT NULL REFERENCES rsi.experiments(experiment_id),
+  ollama_ref        text NOT NULL,               -- tkarcheski/rsi-qwen:3b-latest
+  holdout_delta_pp  numeric,
+  canary_delta_pp   numeric,
+  pushed_at         timestamptz NOT NULL DEFAULT now(),
+  is_current        boolean NOT NULL DEFAULT true,
+  cluster_status    text NOT NULL DEFAULT 'pending',  -- pending | validated | rejected
+  UNIQUE (tuned_id)
+);
+-- At most one current champion at a time.
+CREATE UNIQUE INDEX IF NOT EXISTS rsi_baselines_one_current
+  ON rsi.baselines (is_current) WHERE is_current;

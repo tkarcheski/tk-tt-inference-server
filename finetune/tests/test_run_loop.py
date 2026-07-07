@@ -163,3 +163,14 @@ def test_run_forever_resumes_seed_sequence_from_starting_index(monkeypatch, tmp_
                    sleep_fn=lambda s: None, smoke=False, sleep_s=0,
                    stop_file=str(tmp_path / "nope"), max_rounds=2)
     assert seen == ["1014", "1015"]         # resumed, not reset to 1000
+
+def test_base_arm_uses_rolling_champion_when_promoted(monkeypatch):
+    # Once a champion is promoted, the base arm is it (self-improving ratchet).
+    monkeypatch.setattr(rl.publish_ollama, "current_champion",
+                        lambda: "tkarcheski/rsi-qwen:3b-latest")
+    assert rl.base_arm_tag() == "tkarcheski/rsi-qwen:3b-latest"
+
+def test_base_arm_falls_back_to_stock_base(monkeypatch):
+    monkeypatch.setattr(rl.publish_ollama, "current_champion", lambda: None)
+    monkeypatch.setenv("RSI_BASE_TAG", "qwen2.5:3b")
+    assert rl.base_arm_tag() == "qwen2.5:3b"
