@@ -27,6 +27,7 @@ import contextlib
 import datetime
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -35,6 +36,11 @@ import gate
 
 POOLS = ("holdout", "canary")
 FORK_REPO = "tkarcheski/tk-tt-inference-server"
+# Where the models live (surfaced on the dashboard).
+BASE_HF = "Qwen/Qwen2.5-3B-Instruct"
+BASE_HF_URL = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct"
+TUNED_REGISTRY = "tkarcheski/rsi-ollama-models"          # git-LFS registry (private)
+TUNED_REGISTRY_URL = "https://github.com/tkarcheski/rsi-ollama-models"
 STATUS_BRANCH = os.environ.get("RSI_STATUS_BRANCH", "gh-pages")
 STATUS_REMOTE = os.environ.get("RSI_STATUS_REMOTE", "origin")
 PAGES_URL = os.environ.get("RSI_STATUS_PAGES_URL",
@@ -100,7 +106,16 @@ def build_data(rounds, generated_at, base_model):
         "generated_at": generated_at,
         "pages_url": PAGES_URL,
         "repo_url": f"https://github.com/{FORK_REPO}",
+        # rsi-loop.md is bundled onto this (gh-pages) branch, so the link resolves
+        # regardless of what has (or hasn't) been merged to main.
+        "doc_url": f"https://github.com/{FORK_REPO}/blob/{STATUS_BRANCH}/rsi-loop.md",
         "base_model": base_model,
+        "models": {
+            "base_ollama": base_model,
+            "base_hf": BASE_HF, "base_hf_url": BASE_HF_URL,
+            "tuned_registry": TUNED_REGISTRY, "tuned_registry_url": TUNED_REGISTRY_URL,
+            "registry_private": True,
+        },
         "shadow_only": True,
         "summary": {
             "total_rounds": len(rounds),
@@ -115,12 +130,12 @@ def build_data(rounds, generated_at, base_model):
 
 
 def render_readme(data):
-    s = data["summary"]
+    s, m = data["summary"], data["models"]
     lines = [
         "# RSI MODEL_TUNER — live shadow-loop status",
         "",
         "> Auto-generated every round by the 24/7 [RSI MODEL_TUNER loop]"
-        f"({data['repo_url']}/blob/main/docs/rsi-loop.md). **Shadow-only**: the loop "
+        f"({data['doc_url']}). **Shadow-only**: the loop "
         "LoRA-fine-tunes a small Qwen on robotframework-chat suites, evaluates the "
         "tuned model against the untuned base on a frozen holdout+canary split, and "
         "runs a McNemar promotion gate. Passing rounds are *proposed*, never "
@@ -128,9 +143,18 @@ def render_readme(data):
         "",
         f"**Live dashboard:** {data['pages_url']}",
         "",
+        "## Models",
+        "",
+        f"- **Base (control):** [`{m['base_hf']}`]({m['base_hf_url']}) on Hugging Face, "
+        f"served as Ollama `{m['base_ollama']}`.",
+        f"- **Tuned (per round):** a LoRA fine-tune of the base, merged + served as "
+        "Ollama `rsi-qwen:round`.",
+        f"- **Published tuned models:** [`{m['tuned_registry']}`]({m['tuned_registry_url']}) "
+        f"— git-LFS registry{' (private)' if m['registry_private'] else ''}; a round is "
+        "pushed there only when it passes the gate.",
+        "",
         "## Summary",
         "",
-        f"- Base model (paired control): `{data['base_model']}`",
         f"- Rounds run: **{s['total_rounds']}** ({s['graded_rounds']} graded)",
         f"- Rounds that passed the gate (proposed): **{s['proposed']}**",
         f"- Best canary Δ so far: **{s['best_canary_delta_pp']} pp**",
@@ -214,6 +238,7 @@ _HTML = """<!doctype html>
   <h1><span class="live"></span>RSI MODEL_TUNER — live status</h1>
   <p class="sub" id="sub">Loading…</p>
   <div class="cards" id="cards"></div>
+  <p class="foot" id="models" style="margin-top:-8px;margin-bottom:18px"></p>
   <div class="chart" id="chart" title="Canary Δpp per round"></div>
   <div class="tablewrap"><table id="tbl">
     <thead><tr><th>Seed</th><th>Started</th><th>Holdout Δpp</th><th>p</th>
@@ -234,7 +259,13 @@ async function load(){
       'Shadow-only self-improvement loop. Tuned Qwen vs. untuned base ('+
       '<code>'+d.base_model+'</code>) on a frozen holdout+canary split, McNemar gate. '+
       'Passing rounds are <b>proposed, never auto-promoted</b>. '+
-      '<a href="'+d.repo_url+'/blob/main/docs/rsi-loop.md">How it works ↗</a>';
+      '<a href="'+d.doc_url+'">How it works ↗</a>';
+    const m = d.models;
+    document.getElementById('models').innerHTML =
+      '<b>Models:</b> base <a href="'+m.base_hf_url+'"><code>'+m.base_hf+'</code></a> '+
+      '(Ollama <code>'+m.base_ollama+'</code>) · tuned <code>rsi-qwen:round</code> · '+
+      'published to <a href="'+m.tuned_registry_url+'"><code>'+m.tuned_registry+'</code></a>'+
+      (m.registry_private ? ' (private)' : '');
     const cards = [
       ['Rounds', s.total_rounds],
       ['Proposed', s.proposed],
@@ -267,12 +298,15 @@ load(); setInterval(load, 300000);
 """
 
 
+_TEMPLATE_VERSION = "2"  # bump when index.html / README layout changes
+
+
 def _round_signature(data):
-    """Everything that should trigger a republish — deliberately EXCLUDES
-    generated_at, so an idle timer tick (same rounds, newer clock) is a no-op and
-    does not spam gh-pages with an empty commit every few minutes."""
-    return json.dumps({"rounds": data["rounds"], "summary": data["summary"],
-                       "base_model": data["base_model"]}, sort_keys=True)
+    """Everything that should trigger a republish — the full payload EXCEPT
+    generated_at (so an idle tick with a newer clock is a no-op and does not spam
+    gh-pages), plus a template version so layout/link changes also republish."""
+    payload = {k: v for k, v in data.items() if k != "generated_at"}
+    return json.dumps({"v": _TEMPLATE_VERSION, "data": payload}, sort_keys=True)
 
 
 def _unchanged(status_dir, data):
@@ -286,6 +320,17 @@ def _unchanged(status_dir, data):
         return False  # unreadable / old schema -> rewrite
 
 
+def _doc_source():
+    """The how-it-works doc to bundle onto gh-pages. RSI_STATUS_DOC wins; else the
+    repo's docs/rsi-loop.md if this module runs from the checkout. None -> skip
+    (the dashboard link still points at the gh-pages copy from a prior publish)."""
+    env = os.environ.get("RSI_STATUS_DOC")
+    if env:
+        return env if os.path.exists(env) else None
+    cand = os.path.join(os.path.dirname(_HERE), "docs", "rsi-loop.md")
+    return cand if os.path.exists(cand) else None
+
+
 def write_artifacts(status_dir, data):
     with open(os.path.join(status_dir, "data.json"), "w") as fh:
         json.dump(data, fh, indent=2)
@@ -293,6 +338,11 @@ def write_artifacts(status_dir, data):
         fh.write(_HTML)
     with open(os.path.join(status_dir, "README.md"), "w") as fh:
         fh.write(render_readme(data))
+    # Bundle the explainer so the "How it works" link resolves off this branch,
+    # independent of what's merged to main.
+    doc = _doc_source()
+    if doc:
+        shutil.copy(doc, os.path.join(status_dir, "rsi-loop.md"))
     # Pages must not run Jekyll (it would hide files/dirs starting with _ or .).
     open(os.path.join(status_dir, ".nojekyll"), "a").close()
 

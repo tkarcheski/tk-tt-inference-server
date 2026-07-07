@@ -121,6 +121,35 @@ def test_readme_has_pills_gate_rule_and_no_secrets():
         assert secret not in md
 
 
+def test_readme_links_resolve_and_document_the_models():
+    data = ps.build_data(_rounds(), "t", "qwen2.5:3b")
+    md = ps.render_readme(data)
+    # the how-it-works link must NOT point at main (rsi-loop.md isn't there -> 404)
+    assert "blob/main/docs/rsi-loop.md" not in md
+    assert f"blob/{ps.STATUS_BRANCH}/rsi-loop.md" in md    # bundled on this branch
+    # models are documented: base (HF + ollama) and the tuned registry
+    assert "## Models" in md
+    assert ps.BASE_HF in md and ps.BASE_HF_URL in md
+    assert ps.TUNED_REGISTRY in md and ps.TUNED_REGISTRY_URL in md
+
+
+def test_build_data_exposes_doc_url_and_models():
+    data = ps.build_data(_rounds(), "t", "qwen2.5:3b")
+    assert data["doc_url"].endswith(f"blob/{ps.STATUS_BRANCH}/rsi-loop.md")
+    m = data["models"]
+    assert m["base_hf"] == ps.BASE_HF
+    assert m["tuned_registry"] == ps.TUNED_REGISTRY
+    assert m["registry_private"] is True
+
+
+def test_template_version_change_forces_republish(monkeypatch):
+    # A layout-only change (same rounds) must still republish, else fixes never ship.
+    data = ps.build_data(_rounds(), "t", "qwen2.5:3b")
+    sig_before = ps._round_signature(data)
+    monkeypatch.setattr(ps, "_TEMPLATE_VERSION", ps._TEMPLATE_VERSION + "-next")
+    assert ps._round_signature(data) != sig_before
+
+
 # ---- dashboard is fully self-contained --------------------------------------
 
 def test_html_has_no_external_assets():
@@ -159,6 +188,14 @@ def _mock_run(calls, diff_rc=1):
         rc = diff_rc if cmd[:3] == ["git", "diff", "--cached"] else 0
         return type("R", (), {"returncode": rc, "stdout": "sha999", "stderr": ""})()
     return run
+
+
+def test_write_artifacts_bundles_doc(tmp_path, monkeypatch):
+    doc = tmp_path / "src.md"; doc.write_text("# how it works\n")
+    monkeypatch.setenv("RSI_STATUS_DOC", str(doc))
+    out = tmp_path / "out"; out.mkdir()
+    ps.write_artifacts(str(out), ps.build_data(_rounds(), "t", "qwen2.5:3b"))
+    assert (out / "rsi-loop.md").read_text() == "# how it works\n"   # link target exists
 
 
 def test_commit_and_push_pushes_to_pages_branch(tmp_path, monkeypatch):

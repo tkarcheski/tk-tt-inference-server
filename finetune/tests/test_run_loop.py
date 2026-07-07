@@ -30,7 +30,8 @@ def test_run_forever_stops_on_stop_file(monkeypatch, tmp_path):
     sf = tmp_path / "stop"; sf.write_text("")   # already stopped
     calls = []
     n = rl.run_forever(run_round_fn=lambda **k: calls.append(1) or {},
-                       sleep_fn=lambda s: None, smoke=True, sleep_s=0, stop_file=str(sf))
+                       sleep_fn=lambda s: None, smoke=True, sleep_s=0, stop_file=str(sf),
+                       start_index=0)
     assert n == 0 and calls == []               # never ran a round
 
 def test_run_forever_runs_max_rounds_then_exits(monkeypatch, tmp_path):
@@ -38,7 +39,7 @@ def test_run_forever_runs_max_rounds_then_exits(monkeypatch, tmp_path):
     calls = []
     n = rl.run_forever(run_round_fn=lambda **k: calls.append(k) or {"proposed": False},
                        sleep_fn=lambda s: None, smoke=True, sleep_s=0,
-                       stop_file=str(tmp_path / "nope"), max_rounds=3)
+                       stop_file=str(tmp_path / "nope"), max_rounds=3, start_index=0)
     assert n == 3 and len(calls) == 3
 
 def test_run_forever_continues_after_a_failed_round(monkeypatch, tmp_path):
@@ -51,7 +52,7 @@ def test_run_forever_continues_after_a_failed_round(monkeypatch, tmp_path):
             raise RuntimeError("boom")   # first round explodes
         return {"proposed": False}
     n = rl.run_forever(run_round_fn=flaky, sleep_fn=lambda s: None, smoke=True,
-                       sleep_s=0, stop_file=str(tmp_path / "nope"), max_rounds=3)
+                       sleep_s=0, stop_file=str(tmp_path / "nope"), max_rounds=3, start_index=0)
     assert n == 3 and len(seen) == 3       # survived the failure, ran all 3
 
 def test_run_forever_smoke_caps_max_steps(monkeypatch, tmp_path):
@@ -60,7 +61,7 @@ def test_run_forever_smoke_caps_max_steps(monkeypatch, tmp_path):
     seen = []
     rl.run_forever(run_round_fn=lambda **k: seen.append(os.environ.get("MAX_STEPS")) or {},
                    sleep_fn=lambda s: None, smoke=True, sleep_s=0,
-                   stop_file=str(tmp_path / "nope"), max_rounds=2)
+                   stop_file=str(tmp_path / "nope"), max_rounds=2, start_index=0)
     assert seen == ["3", "3"]                     # tiny, not the grid's 200/300
 
 def test_run_forever_real_uses_grid_max_steps(monkeypatch, tmp_path):
@@ -69,7 +70,7 @@ def test_run_forever_real_uses_grid_max_steps(monkeypatch, tmp_path):
     seen = []
     rl.run_forever(run_round_fn=lambda **k: seen.append(os.environ.get("MAX_STEPS")) or {},
                    sleep_fn=lambda s: None, smoke=False, sleep_s=0,
-                   stop_file=str(tmp_path / "nope"), max_rounds=2)
+                   stop_file=str(tmp_path / "nope"), max_rounds=2, start_index=0)
     assert seen == [rl.round_config(0)["MAX_STEPS"], rl.round_config(1)["MAX_STEPS"]]
 
 def test_filter_eval_suites_drops_only_named_suites_from_eval():
@@ -124,3 +125,41 @@ def test_no_pr_without_opt_in(monkeypatch):
 def test_no_pr_in_live_mode(monkeypatch):
     # can_promote() True in live → draft-PR proposal path suppressed
     assert _pr_calls(monkeypatch, proposed=True, mode="live", open_pr="1") == []
+
+
+class _FakeCur:
+    def __init__(self, val): self._val = val
+    def execute(self, *a, **k): pass
+    def fetchone(self): return (self._val,)
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+
+class _FakeConn:
+    def __init__(self, val): self._val = val
+    def cursor(self): return _FakeCur(self._val)
+    def close(self): pass
+
+def test_starting_index_resumes_from_warehouse_max_seed(monkeypatch):
+    monkeypatch.setattr(rl.rsi_common, "connect", lambda: _FakeConn(1013))
+    assert rl.starting_index() == 14        # 1013 - 1000 + 1 (no duplicate seeds)
+
+def test_starting_index_zero_when_no_rounds(monkeypatch):
+    monkeypatch.setattr(rl.rsi_common, "connect", lambda: _FakeConn(None))
+    assert rl.starting_index() == 0
+
+def test_starting_index_degrades_gracefully_on_db_error(monkeypatch):
+    def boom(): raise RuntimeError("db down")
+    monkeypatch.setattr(rl.rsi_common, "connect", boom)
+    assert rl.starting_index() == 0         # never crashes the supervisor
+
+def test_run_forever_resumes_seed_sequence_from_starting_index(monkeypatch, tmp_path):
+    # With no start_index override, the loop resumes from the warehouse: the first
+    # round after a restart must use the NEXT seed, not re-run seed 1000.
+    monkeypatch.delenv("RSI_KILL", raising=False)
+    monkeypatch.setattr(rl, "starting_index", lambda: 14)
+    seen = []
+    import os
+    rl.run_forever(run_round_fn=lambda **k: seen.append(os.environ.get("SEED")) or {},
+                   sleep_fn=lambda s: None, smoke=False, sleep_s=0,
+                   stop_file=str(tmp_path / "nope"), max_rounds=2)
+    assert seen == ["1014", "1015"]         # resumed, not reset to 1000

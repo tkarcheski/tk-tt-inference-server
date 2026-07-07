@@ -170,6 +170,27 @@ def round_config(idx):
     return cfg
 
 
+def starting_index():
+    """Resume the round counter after a restart instead of resetting to 0.
+
+    `round_config(idx)` derives SEED as 1000+idx, so restarting from idx=0 would
+    re-run already-used seeds — producing duplicate, confusing seeds (notably on
+    the public status dashboard). Continue the sequence from the warehouse's
+    highest recorded round seed. Returns the next idx (0 if no prior rounds or the
+    warehouse is unreachable)."""
+    try:
+        with contextlib.closing(rsi_common.connect()) as c, c.cursor() as cur:
+            cur.execute("select max(seed) from rsi.experiments "
+                        "where intent='model_tuner_round'")
+            row = cur.fetchone()
+        m = row[0] if row and row[0] is not None else None
+        return (m - 1000 + 1) if m is not None else 0
+    except Exception as e:
+        print(f"starting_index: warehouse read failed ({e!r}); starting at 0",
+              file=sys.stderr)
+        return 0
+
+
 def should_stop(stop_file):
     """Kill switch: env RSI_KILL=1 or the existence of the stop-file. A running
     24/7 service is halted ergonomically by `touch`-ing the stop-file."""
@@ -177,7 +198,7 @@ def should_stop(stop_file):
 
 
 def run_forever(run_round_fn=None, sleep_fn=time.sleep, smoke=None,
-                sleep_s=None, stop_file=None, max_rounds=None):
+                sleep_s=None, stop_file=None, max_rounds=None, start_index=None):
     """Supervisor: run rounds back-to-back until stopped.
 
     A failing round is logged and the loop CONTINUES — one bad round (OOM, a
@@ -202,13 +223,17 @@ def run_forever(run_round_fn=None, sleep_fn=time.sleep, smoke=None,
     print(f"RSI loop starting: smoke={smoke} sleep={sleep_s}s stop_file={stop_file} "
           f"max_rounds={max_rounds or 'unlimited'} mode={os.environ.get('RSI_MODE', 'shadow')}",
           file=sys.stderr, flush=True)
-    idx = 0
+    # Resume the SEED/round sequence from the warehouse (see starting_index) so a
+    # restart doesn't re-run used seeds. `ran` counts rounds THIS invocation, so
+    # max_rounds still means "run N more rounds" regardless of where idx resumes.
+    idx = starting_index() if start_index is None else start_index
+    ran = 0
     while True:
         if should_stop(stop_file):
-            print(f"RSI loop stopping (kill switch / stop-file {stop_file}) after {idx} rounds",
+            print(f"RSI loop stopping (kill switch / stop-file {stop_file}) after {ran} rounds",
                   file=sys.stderr, flush=True)
             break
-        if max_rounds is not None and idx >= max_rounds:
+        if max_rounds is not None and ran >= max_rounds:
             print(f"RSI loop reached max_rounds={max_rounds}; exiting", file=sys.stderr, flush=True)
             break
         cfg = round_config(idx)
@@ -229,10 +254,11 @@ def run_forever(run_round_fn=None, sleep_fn=time.sleep, smoke=None,
             print(f"=== RSI round {idx} FAILED: {e!r} — continuing ===", file=sys.stderr, flush=True)
             traceback.print_exc()
         idx += 1
+        ran += 1
         if should_stop(stop_file):
             continue  # skip the sleep; the loop-top check will break out
         sleep_fn(sleep_s)
-    return idx
+    return ran
 
 
 if __name__ == "__main__":
