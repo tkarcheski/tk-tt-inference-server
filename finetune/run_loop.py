@@ -11,7 +11,7 @@ explicitly taken out of shadow mode via env, and nothing in this file acts on
 that beyond the check itself.
 """
 import argparse, contextlib, json, os, subprocess, sys, time, traceback, uuid, pathlib
-import rsi_common, split_suites, serve_ollama, eval_rfc, import_results, gate, publish
+import rsi_common, split_suites, serve_ollama, eval_rfc, import_results, gate, publish, publish_status
 
 FT = pathlib.Path(__file__).parent
 BASE_MODEL = os.environ.get("BASE_MODEL", "Qwen/Qwen2.5-3B-Instruct")
@@ -145,6 +145,7 @@ def run_round(once=True, smoke=False):
     report["proposed"] = bool(canary["passes"] and holdout["passes"])
     maybe_open_pr(report)
     publish.maybe_publish(report, merged)  # opt-in RSI_PUBLISH=1; no-op unless proposed
+    publish_status.maybe_publish_status(report)  # opt-in RSI_PUBLISH_STATUS=1; refresh public dashboard
     print(json.dumps(report, indent=2))
     return report
 
