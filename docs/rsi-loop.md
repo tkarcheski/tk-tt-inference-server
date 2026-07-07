@@ -97,6 +97,19 @@ is only ever one, holding the *latest* round's tuned model. Which round/adapter 
 came from is *not* in the tag — that provenance lives in the warehouse
 (`lora_adapter_hash`, `seed`, `train_pool_hash`). See [Known limitations](#known-limitations).
 
+### Where the models live
+
+- **Base (control):** [`Qwen/Qwen2.5-3B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct)
+  on Hugging Face (`BASE_MODEL`), served locally as the Ollama tag `qwen2.5:3b`.
+- **Tuned, this round:** local only — the merged fp16 weights under
+  `finetune/out/lora-qwen/merged`, served as Ollama `rsi-qwen:round` (overwritten
+  each round).
+- **Tuned, published:** a round that clears the gate is pushed (opt-in, see
+  [Publishing](#publishing-publishpy-opt-in)) to the git-LFS **model registry**
+  [`tkarcheski/rsi-ollama-models`](https://github.com/tkarcheski/rsi-ollama-models)
+  — tagged `rsi-qwen-v{seed}-{hash8}`, immutable per version. That repo is the
+  durable "where the Qwen models live" answer for anything the loop promotes.
+
 ---
 
 ## The gate (`gate.py`)
@@ -196,6 +209,33 @@ it down; no model or endpoint is ever touched.
 
 ---
 
+## Rolling baseline — Ollama champion (`publish_ollama.py`, opt-in)
+
+The loop can promote a winner to the Ollama registry so the **larger RFC-chat
+cluster** validates it at scale. When a round clears the gate (`report["proposed"]`)
+**and** `RSI_PUSH_OLLAMA == "1"`, `publish_ollama.maybe_push_ollama`:
+
+1. `ollama cp rsi-qwen:round tkarcheski/rsi-qwen:3b-latest` → `ollama push` it.
+2. Records it in `rsi.baselines` as the sole **current champion**.
+
+**The champion rolls only if the push succeeds** — a failed push (e.g. registry
+auth not set up) leaves the baseline unchanged, so the loop never advances onto a
+model the cluster never received. Then the **rolling ratchet** kicks in:
+`base_arm_tag()` makes the base (control) arm the current champion, so each
+subsequent round's tuned model must beat the *last promoted* model — the bar rises
+with every promotion.
+
+The current + historical champions (version, canary Δ, pushed-at, `cluster_status`)
+surface on the [status dashboard](https://tkarcheski.github.io/tk-tt-inference-server/).
+
+**Setup (one-time):** pushing to the `tkarcheski/*` namespace needs this box's
+Ollama public key (`~/.ollama/id_ed25519.pub`) registered on the `tkarcheski`
+ollama.com account (Settings → Keys). Until then `ollama push` 401s and the step
+is a logged no-op. Rollback: `ollama rm tkarcheski/rsi-qwen:3b-latest` + delete the
+`rsi.baselines` row (or push the previous champion back).
+
+---
+
 ## The 24/7 supervisor (`run_loop.py --forever` + `scripts/rsi/`)
 
 `run_forever()` runs rounds continuously:
@@ -262,6 +302,8 @@ for operations.
 | `RSI_PUBLISH` | *(unset)* | `1` arms the publish pipeline (registry push + GitHub release on a passing gate). |
 | `RSI_MODELS_SUBMODULE` | `ollama-models` | Path to the git-LFS model-registry submodule. |
 | `RSI_PUBLISH_STATUS` | *(unset)* | `1` arms the public status dashboard (refresh `gh-pages` each round). |
+| `RSI_PUSH_OLLAMA` | *(unset)* | `1` arms the Ollama champion push on a passing gate (`tkarcheski/rsi-qwen:3b-latest`, rolling baseline). Needs registry auth (issue #11). |
+| `RSI_OLLAMA_TARGET` | `tkarcheski/rsi-qwen:3b-latest` | Ollama tag the champion is pushed to / rolled in as the base arm. |
 | `RSI_STATUS_DIR` | `~/AI/rsi-status-pages` | Fork checkout on `gh-pages` that `publish_status.py` commits to. |
 | `RSI_STATUS_BRANCH` | `gh-pages` | Pages branch the dashboard is pushed to (never main). |
 | `RSI_REPEATS` | `1` | Eval repeats per suite. |

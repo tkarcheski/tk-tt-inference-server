@@ -25,8 +25,10 @@ credentials, tokens, file paths, prompts, or grader rationales ever leave the bo
 import argparse
 import contextlib
 import datetime
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -35,6 +37,12 @@ import gate
 
 POOLS = ("holdout", "canary")
 FORK_REPO = "tkarcheski/tk-tt-inference-server"
+# Where the models live (surfaced on the dashboard).
+BASE_HF = "Qwen/Qwen2.5-3B-Instruct"
+BASE_HF_URL = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct"
+TUNED_REGISTRY = "tkarcheski/rsi-ollama-models"          # git-LFS registry (private)
+TUNED_REGISTRY_URL = "https://github.com/tkarcheski/rsi-ollama-models"
+OLLAMA_BASELINE = "tkarcheski/rsi-qwen:3b-latest"        # rolling champion on the Ollama registry
 STATUS_BRANCH = os.environ.get("RSI_STATUS_BRANCH", "gh-pages")
 STATUS_REMOTE = os.environ.get("RSI_STATUS_REMOTE", "origin")
 PAGES_URL = os.environ.get("RSI_STATUS_PAGES_URL",
@@ -93,14 +101,49 @@ def collect_rounds():
     return rounds
 
 
-def build_data(rounds, generated_at, base_model):
+def collect_baselines():
+    """Champions pushed to the Ollama registry (`rsi.baselines`), newest first.
+    The is_current row is what the loop's next round must beat + what the larger
+    RFC-chat cluster validates. Empty list if none promoted (or table absent)."""
+    try:
+        with contextlib.closing(rsi_common.connect()) as c, c.cursor() as cur:
+            cur.execute(
+                "select version, ollama_ref, holdout_delta_pp, canary_delta_pp, "
+                "       to_char(pushed_at,'YYYY-MM-DD\"T\"HH24:MI:SS'), is_current, "
+                "       cluster_status "
+                "from rsi.baselines order by pushed_at desc")
+            rows = cur.fetchall()
+    except Exception as e:
+        print(f"baselines: warehouse read failed ({e!r}); omitting", file=sys.stderr)
+        return []
+    return [{"version": v, "ollama_ref": ref,
+             "holdout_delta_pp": float(h) if h is not None else None,
+             "canary_delta_pp": float(cd) if cd is not None else None,
+             "pushed_at": at, "is_current": cur_, "cluster_status": cs}
+            for v, ref, h, cd, at, cur_, cs in rows]
+
+
+def build_data(rounds, generated_at, base_model, doc_sha=None, baselines=None):
+    baselines = baselines or []
+    current = next((b for b in baselines if b["is_current"]), None)
     graded = [r for r in rounds if not r["degenerate"]]
     best = max((r["canary"]["delta_pp"] for r in graded), default=None)
     return {
         "generated_at": generated_at,
         "pages_url": PAGES_URL,
         "repo_url": f"https://github.com/{FORK_REPO}",
+        # rsi-loop.md is bundled onto this (gh-pages) branch, so the link resolves
+        # regardless of what has (or hasn't) been merged to main.
+        "doc_url": f"https://github.com/{FORK_REPO}/blob/{STATUS_BRANCH}/rsi-loop.md",
         "base_model": base_model,
+        "doc_sha": doc_sha,          # in the signature -> a doc edit republishes
+        "models": {
+            "base_ollama": base_model,
+            "base_hf": BASE_HF, "base_hf_url": BASE_HF_URL,
+            "tuned_registry": TUNED_REGISTRY, "tuned_registry_url": TUNED_REGISTRY_URL,
+            "registry_private": True,
+            "ollama_baseline": OLLAMA_BASELINE,
+        },
         "shadow_only": True,
         "summary": {
             "total_rounds": len(rounds),
@@ -109,18 +152,23 @@ def build_data(rounds, generated_at, base_model):
             "best_canary_delta_pp": best,
             "latest_seed": rounds[-1]["seed"] if rounds else None,
             "latest_started": rounds[-1]["started"] if rounds else None,
+            "baselines_promoted": len(baselines),
         },
+        # The rolling champion pushed to the Ollama registry (self-improving
+        # baseline); None until a round clears the gate + pushes successfully.
+        "baseline": current,
+        "baselines": baselines,
         "rounds": rounds,
     }
 
 
 def render_readme(data):
-    s = data["summary"]
+    s, m = data["summary"], data["models"]
     lines = [
         "# RSI MODEL_TUNER — live shadow-loop status",
         "",
         "> Auto-generated every round by the 24/7 [RSI MODEL_TUNER loop]"
-        f"({data['repo_url']}/blob/main/docs/rsi-loop.md). **Shadow-only**: the loop "
+        f"({data['doc_url']}). **Shadow-only**: the loop "
         "LoRA-fine-tunes a small Qwen on robotframework-chat suites, evaluates the "
         "tuned model against the untuned base on a frozen holdout+canary split, and "
         "runs a McNemar promotion gate. Passing rounds are *proposed*, never "
@@ -128,11 +176,39 @@ def render_readme(data):
         "",
         f"**Live dashboard:** {data['pages_url']}",
         "",
+        "## Models",
+        "",
+        f"- **Base (control):** [`{m['base_hf']}`]({m['base_hf_url']}) on Hugging Face, "
+        f"served as Ollama `{m['base_ollama']}`.",
+        f"- **Tuned (per round):** a LoRA fine-tune of the base, merged + served as "
+        "Ollama `rsi-qwen:round`.",
+        f"- **Published tuned models:** [`{m['tuned_registry']}`]({m['tuned_registry_url']}) "
+        f"— git-LFS registry{' (private)' if m['registry_private'] else ''}; a round is "
+        "pushed there only when it passes the gate.",
+        "",
+        "## Rolling baseline (`" + m["ollama_baseline"] + "`)",
+        "",
+    ]
+    b = data["baseline"]
+    if b:
+        lines += [
+            f"🏆 **Current baseline:** `{b['version']}` — canary Δ {b['canary_delta_pp']}pp, "
+            f"pushed {b['pushed_at']}, cluster validation: **{b['cluster_status']}**.",
+            "",
+            f"The larger RFC-chat cluster pulls it (`ollama pull {m['ollama_baseline']}`); "
+            "each new round now tunes against **this** champion, so the bar ratchets up.",
+        ]
+    else:
+        lines.append(
+            f"No baseline promoted yet — the first round to clear the gate is pushed to "
+            f"`{m['ollama_baseline']}` and becomes the rolling baseline the loop must beat.")
+    lines += [
+        "",
         "## Summary",
         "",
-        f"- Base model (paired control): `{data['base_model']}`",
         f"- Rounds run: **{s['total_rounds']}** ({s['graded_rounds']} graded)",
         f"- Rounds that passed the gate (proposed): **{s['proposed']}**",
+        f"- Baselines promoted to `{m['ollama_baseline']}`: **{s['baselines_promoted']}**",
         f"- Best canary Δ so far: **{s['best_canary_delta_pp']} pp**",
         f"- Latest round: seed `{s['latest_seed']}` at {s['latest_started']}",
         f"- Generated: {data['generated_at']}",
@@ -190,6 +266,11 @@ _HTML = """<!doctype html>
   .card .k { color:var(--mut); font-size:12px; text-transform:uppercase;
              letter-spacing:.04em; }
   .card .v { font-size:26px; font-weight:650; margin-top:4px; }
+  .banner { border:1px solid var(--line); border-radius:10px; padding:12px 16px;
+            margin:0 0 18px; background:var(--card); font-size:13.5px; line-height:1.6; }
+  .banner.mutbg { color:var(--mut); }
+  .banner code { font-size:12.5px; }
+  .mut { color:var(--mut); }
   .chart { display:flex; align-items:flex-end; gap:3px; height:120px; padding:10px 0;
            border-bottom:1px solid var(--line); margin-bottom:18px; overflow-x:auto; }
   .bar { flex:0 0 auto; width:14px; border-radius:3px 3px 0 0; background:var(--deg);
@@ -214,6 +295,8 @@ _HTML = """<!doctype html>
   <h1><span class="live"></span>RSI MODEL_TUNER — live status</h1>
   <p class="sub" id="sub">Loading…</p>
   <div class="cards" id="cards"></div>
+  <p class="foot" id="models" style="margin-top:-8px;margin-bottom:10px"></p>
+  <div id="baseline"></div>
   <div class="chart" id="chart" title="Canary Δpp per round"></div>
   <div class="tablewrap"><table id="tbl">
     <thead><tr><th>Seed</th><th>Started</th><th>Holdout Δpp</th><th>p</th>
@@ -234,7 +317,24 @@ async function load(){
       'Shadow-only self-improvement loop. Tuned Qwen vs. untuned base ('+
       '<code>'+d.base_model+'</code>) on a frozen holdout+canary split, McNemar gate. '+
       'Passing rounds are <b>proposed, never auto-promoted</b>. '+
-      '<a href="'+d.repo_url+'/blob/main/docs/rsi-loop.md">How it works ↗</a>';
+      '<a href="'+d.doc_url+'">How it works ↗</a>';
+    const m = d.models;
+    document.getElementById('models').innerHTML =
+      '<b>Models:</b> base <a href="'+m.base_hf_url+'"><code>'+m.base_hf+'</code></a> '+
+      '(Ollama <code>'+m.base_ollama+'</code>) · tuned <code>rsi-qwen:round</code> · '+
+      'published to <a href="'+m.tuned_registry_url+'"><code>'+m.tuned_registry+'</code></a>'+
+      (m.registry_private ? ' (private)' : '');
+    // rolling champion pushed to the Ollama registry for the larger RFC-chat cluster
+    const b = d.baseline;
+    document.getElementById('baseline').innerHTML = b
+      ? '<div class="banner"><b>🏆 Current baseline (rolling champion):</b> '+
+        '<code>'+m.ollama_baseline+'</code> = '+b.version+' · canary Δ '+fmt(b.canary_delta_pp)+
+        'pp · pushed '+b.pushed_at+' · cluster: <b>'+b.cluster_status+'</b>'+
+        '<br><span class="mut">The larger RFC-chat cluster validates this via '+
+        '<code>ollama pull '+m.ollama_baseline+'</code>; the loop now tunes against it.</span></div>'
+      : '<div class="banner mutbg"><b>No baseline promoted yet.</b> '+
+        'The first round to clear the gate is pushed to <code>'+m.ollama_baseline+
+        '</code> and becomes the rolling baseline the loop must beat.</div>';
     const cards = [
       ['Rounds', s.total_rounds],
       ['Proposed', s.proposed],
@@ -267,12 +367,15 @@ load(); setInterval(load, 300000);
 """
 
 
+_TEMPLATE_VERSION = "3"  # bump when index.html / README layout changes
+
+
 def _round_signature(data):
-    """Everything that should trigger a republish — deliberately EXCLUDES
-    generated_at, so an idle timer tick (same rounds, newer clock) is a no-op and
-    does not spam gh-pages with an empty commit every few minutes."""
-    return json.dumps({"rounds": data["rounds"], "summary": data["summary"],
-                       "base_model": data["base_model"]}, sort_keys=True)
+    """Everything that should trigger a republish — the full payload EXCEPT
+    generated_at (so an idle tick with a newer clock is a no-op and does not spam
+    gh-pages), plus a template version so layout/link changes also republish."""
+    payload = {k: v for k, v in data.items() if k != "generated_at"}
+    return json.dumps({"v": _TEMPLATE_VERSION, "data": payload}, sort_keys=True)
 
 
 def _unchanged(status_dir, data):
@@ -286,6 +389,17 @@ def _unchanged(status_dir, data):
         return False  # unreadable / old schema -> rewrite
 
 
+def _doc_source():
+    """The how-it-works doc to bundle onto gh-pages. RSI_STATUS_DOC wins; else the
+    repo's docs/rsi-loop.md if this module runs from the checkout. None -> skip
+    (the dashboard link still points at the gh-pages copy from a prior publish)."""
+    env = os.environ.get("RSI_STATUS_DOC")
+    if env:
+        return env if os.path.exists(env) else None
+    cand = os.path.join(os.path.dirname(_HERE), "docs", "rsi-loop.md")
+    return cand if os.path.exists(cand) else None
+
+
 def write_artifacts(status_dir, data):
     with open(os.path.join(status_dir, "data.json"), "w") as fh:
         json.dump(data, fh, indent=2)
@@ -293,6 +407,11 @@ def write_artifacts(status_dir, data):
         fh.write(_HTML)
     with open(os.path.join(status_dir, "README.md"), "w") as fh:
         fh.write(render_readme(data))
+    # Bundle the explainer so the "How it works" link resolves off this branch,
+    # independent of what's merged to main.
+    doc = _doc_source()
+    if doc:
+        shutil.copy(doc, os.path.join(status_dir, "rsi-loop.md"))
     # Pages must not run Jekyll (it would hide files/dirs starting with _ or .).
     open(os.path.join(status_dir, ".nojekyll"), "a").close()
 
@@ -330,7 +449,14 @@ def publish_now(status_dir=None, generated_at=None,
     base_model = base_model or os.environ.get("RSI_BASE_TAG", "qwen2.5:3b")
     os.makedirs(status_dir, exist_ok=True)
     rounds = collect_rounds()
-    data = build_data(rounds, generated_at, base_model)
+    baselines = collect_baselines()
+    doc = _doc_source()
+    doc_sha = None
+    if doc:
+        with open(doc, "rb") as fh:
+            doc_sha = hashlib.sha256(fh.read()).hexdigest()[:12]
+    data = build_data(rounds, generated_at, base_model, doc_sha=doc_sha,
+                      baselines=baselines)
     result = {"rounds": len(rounds), "status_dir": status_dir,
               "proposed": data["summary"]["proposed"]}
     # Idle-tick fast path: identical round data -> leave files (and their clock)

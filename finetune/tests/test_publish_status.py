@@ -91,6 +91,37 @@ def test_build_data_summary_counts():
     assert s["best_canary_delta_pp"] == 7.0        # best among graded
     assert s["latest_seed"] == 1004
     assert data["shadow_only"] is True
+    assert data["baseline"] is None                # nothing promoted
+    assert s["baselines_promoted"] == 0
+
+
+# ---- rolling baseline (Ollama champion) --------------------------------------
+
+def _baseline(current=True):
+    return {"version": "v1002-deadbeef", "ollama_ref": "tkarcheski/rsi-qwen:3b-latest",
+            "holdout_delta_pp": 22.0, "canary_delta_pp": 7.0,
+            "pushed_at": "2026-07-05T13:00:00", "is_current": current,
+            "cluster_status": "pending"}
+
+
+def test_build_data_surfaces_current_baseline():
+    data = ps.build_data(_rounds(), "t", "qwen2.5:3b",
+                         baselines=[_baseline(current=True)])
+    assert data["baseline"]["version"] == "v1002-deadbeef"
+    assert data["summary"]["baselines_promoted"] == 1
+    assert data["models"]["ollama_baseline"] == "tkarcheski/rsi-qwen:3b-latest"
+
+
+def test_readme_shows_baseline_when_promoted():
+    data = ps.build_data(_rounds(), "t", "qwen2.5:3b", baselines=[_baseline()])
+    md = ps.render_readme(data)
+    assert "🏆 **Current baseline:** `v1002-deadbeef`" in md
+    assert "tkarcheski/rsi-qwen:3b-latest" in md
+
+
+def test_readme_shows_no_baseline_message_when_none():
+    md = ps.render_readme(ps.build_data(_rounds(), "t", "qwen2.5:3b"))
+    assert "No baseline promoted yet" in md
 
 
 # ---- signature ignores the clock (idle-tick no-op) --------------------------
@@ -119,6 +150,35 @@ def test_readme_has_pills_gate_rule_and_no_secrets():
     # never leak connection secrets
     for secret in ("changeme", "password", "DATABASE_URL", "5434"):
         assert secret not in md
+
+
+def test_readme_links_resolve_and_document_the_models():
+    data = ps.build_data(_rounds(), "t", "qwen2.5:3b")
+    md = ps.render_readme(data)
+    # the how-it-works link must NOT point at main (rsi-loop.md isn't there -> 404)
+    assert "blob/main/docs/rsi-loop.md" not in md
+    assert f"blob/{ps.STATUS_BRANCH}/rsi-loop.md" in md    # bundled on this branch
+    # models are documented: base (HF + ollama) and the tuned registry
+    assert "## Models" in md
+    assert ps.BASE_HF in md and ps.BASE_HF_URL in md
+    assert ps.TUNED_REGISTRY in md and ps.TUNED_REGISTRY_URL in md
+
+
+def test_build_data_exposes_doc_url_and_models():
+    data = ps.build_data(_rounds(), "t", "qwen2.5:3b")
+    assert data["doc_url"].endswith(f"blob/{ps.STATUS_BRANCH}/rsi-loop.md")
+    m = data["models"]
+    assert m["base_hf"] == ps.BASE_HF
+    assert m["tuned_registry"] == ps.TUNED_REGISTRY
+    assert m["registry_private"] is True
+
+
+def test_template_version_change_forces_republish(monkeypatch):
+    # A layout-only change (same rounds) must still republish, else fixes never ship.
+    data = ps.build_data(_rounds(), "t", "qwen2.5:3b")
+    sig_before = ps._round_signature(data)
+    monkeypatch.setattr(ps, "_TEMPLATE_VERSION", ps._TEMPLATE_VERSION + "-next")
+    assert ps._round_signature(data) != sig_before
 
 
 # ---- dashboard is fully self-contained --------------------------------------
@@ -159,6 +219,14 @@ def _mock_run(calls, diff_rc=1):
         rc = diff_rc if cmd[:3] == ["git", "diff", "--cached"] else 0
         return type("R", (), {"returncode": rc, "stdout": "sha999", "stderr": ""})()
     return run
+
+
+def test_write_artifacts_bundles_doc(tmp_path, monkeypatch):
+    doc = tmp_path / "src.md"; doc.write_text("# how it works\n")
+    monkeypatch.setenv("RSI_STATUS_DOC", str(doc))
+    out = tmp_path / "out"; out.mkdir()
+    ps.write_artifacts(str(out), ps.build_data(_rounds(), "t", "qwen2.5:3b"))
+    assert (out / "rsi-loop.md").read_text() == "# how it works\n"   # link target exists
 
 
 def test_commit_and_push_pushes_to_pages_branch(tmp_path, monkeypatch):

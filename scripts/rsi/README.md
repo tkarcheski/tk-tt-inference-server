@@ -50,6 +50,7 @@ scripts/rsi/rsictl.sh follow      # tail the journal
 | `RSI_MAX_ROUNDS` | `0` | `>0` caps total rounds (mostly for testing). |
 | `RSI_PUBLISH` | *(unset)* | `1` arms the publish pipeline: on a passing gate, push the GGUF to the git-LFS registry submodule + cut a GitHub release on the fork. Off by default. See `docs/rsi-loop.md` → Publishing. Rollback: `gh release delete` + delete the submodule tag/commit + `ollama rm`. |
 | `RSI_PUBLISH_STATUS` | *(unset)* | `1` refreshes the **public status dashboard** each round (commits to the `gh-pages` branch; **never main**). Live: <https://tkarcheski.github.io/tk-tt-inference-server/>. Needs a fork checkout on `gh-pages` at `RSI_STATUS_DIR`. Off by default. See `docs/rsi-loop.md` → Public status dashboard. Rollback: disable Pages / delete `gh-pages`. |
+| `RSI_PUSH_OLLAMA` | *(unset)* | `1` pushes a gate-passing model to `tkarcheski/rsi-qwen:3b-latest` (Ollama registry) and rolls it in as the new baseline (self-improving ratchet). The larger RFC-chat cluster validates it. Needs one-time Ollama-registry auth — see [issue #11](https://github.com/tkarcheski/tk-tt-inference-server/issues/11). Off by default; champion only rolls if the push succeeds. Rollback: `ollama rm` + delete the `rsi.baselines` row. |
 
 Example — validate fast, then go real:
 
