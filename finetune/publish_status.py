@@ -25,6 +25,7 @@ credentials, tokens, file paths, prompts, or grader rationales ever leave the bo
 import argparse
 import contextlib
 import datetime
+import hashlib
 import json
 import os
 import shutil
@@ -99,7 +100,7 @@ def collect_rounds():
     return rounds
 
 
-def build_data(rounds, generated_at, base_model):
+def build_data(rounds, generated_at, base_model, doc_sha=None):
     graded = [r for r in rounds if not r["degenerate"]]
     best = max((r["canary"]["delta_pp"] for r in graded), default=None)
     return {
@@ -110,6 +111,7 @@ def build_data(rounds, generated_at, base_model):
         # regardless of what has (or hasn't) been merged to main.
         "doc_url": f"https://github.com/{FORK_REPO}/blob/{STATUS_BRANCH}/rsi-loop.md",
         "base_model": base_model,
+        "doc_sha": doc_sha,          # in the signature -> a doc edit republishes
         "models": {
             "base_ollama": base_model,
             "base_hf": BASE_HF, "base_hf_url": BASE_HF_URL,
@@ -380,7 +382,12 @@ def publish_now(status_dir=None, generated_at=None,
     base_model = base_model or os.environ.get("RSI_BASE_TAG", "qwen2.5:3b")
     os.makedirs(status_dir, exist_ok=True)
     rounds = collect_rounds()
-    data = build_data(rounds, generated_at, base_model)
+    doc = _doc_source()
+    doc_sha = None
+    if doc:
+        with open(doc, "rb") as fh:
+            doc_sha = hashlib.sha256(fh.read()).hexdigest()[:12]
+    data = build_data(rounds, generated_at, base_model, doc_sha=doc_sha)
     result = {"rounds": len(rounds), "status_dir": status_dir,
               "proposed": data["summary"]["proposed"]}
     # Idle-tick fast path: identical round data -> leave files (and their clock)
