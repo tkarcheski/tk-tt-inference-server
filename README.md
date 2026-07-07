@@ -16,7 +16,7 @@
 - Rounds that passed the gate (proposed): **0**
 - Best canary Δ so far: **-5.0 pp**
 - Latest round: seed `1016` at 2026-07-06T23:25:26
-- Generated: 2026-07-07 01:17 UTC
+- Generated: 2026-07-07 01:24 UTC
 
 ## Rounds (most recent first)
 

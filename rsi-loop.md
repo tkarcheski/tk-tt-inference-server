@@ -97,6 +97,19 @@ is only ever one, holding the *latest* round's tuned model. Which round/adapter 
 came from is *not* in the tag — that provenance lives in the warehouse
 (`lora_adapter_hash`, `seed`, `train_pool_hash`). See [Known limitations](#known-limitations).
 
+### Where the models live
+
+- **Base (control):** [`Qwen/Qwen2.5-3B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct)
+  on Hugging Face (`BASE_MODEL`), served locally as the Ollama tag `qwen2.5:3b`.
+- **Tuned, this round:** local only — the merged fp16 weights under
+  `finetune/out/lora-qwen/merged`, served as Ollama `rsi-qwen:round` (overwritten
+  each round).
+- **Tuned, published:** a round that clears the gate is pushed (opt-in, see
+  [Publishing](#publishing-publishpy-opt-in)) to the git-LFS **model registry**
+  [`tkarcheski/rsi-ollama-models`](https://github.com/tkarcheski/rsi-ollama-models)
+  — tagged `rsi-qwen-v{seed}-{hash8}`, immutable per version. That repo is the
+  durable "where the Qwen models live" answer for anything the loop promotes.
+
 ---
 
 ## The gate (`gate.py`)
