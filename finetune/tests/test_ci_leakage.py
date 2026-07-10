@@ -17,4 +17,7 @@ def test_committed_split_matches_deterministic_bucketing():
         for suite in split["splits"][pool]:
             assert s.split_of(suite) == pool, f"{suite} in {pool} but buckets to {s.split_of(suite)}"
     assigned = [x for p in ("train", "holdout", "canary") for x in split["splits"][p]]
-    assert sorted(assigned) == sorted(s.rsi_common.GOLD_SUITES)
+    # The committed pool listing spans every evaluated suite: gold-answer suites
+    # plus execution-graded suites (e.g. docker/python), which are pinned to an
+    # eval pool and never enter the train fingerprint set.
+    assert sorted(assigned) == sorted(s.rsi_common.EVAL_SUITES)

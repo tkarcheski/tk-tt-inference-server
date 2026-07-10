@@ -10,6 +10,14 @@ def bucket(suite_id: str) -> int:
     return int(hashlib.sha256((SALT + suite_id).encode()).hexdigest(), 16) % 10
 
 def split_of(suite_id: str) -> str:
+    # Execution-graded suites (rsi_common.EXEC_SUITES) are eval-only: they carry no
+    # gold answer, so they contribute zero training fingerprints and are pinned to
+    # an eval pool. Pin to holdout — the sanity read — rather than the canary
+    # promotion gate, so a first-of-its-kind execution suite is exercised
+    # end-to-end without immediately driving promotion decisions. They can never
+    # land in train (run_loop only evaluates holdout/canary), so they never leak.
+    if suite_id in rsi_common.EXEC_SUITES:
+        return "holdout"
     b = bucket(suite_id)
     return "train" if b < 7 else ("holdout" if b < 9 else "canary")
 
@@ -43,7 +51,10 @@ def write_split(rfc_root, out_path):
         raise LeakageError(f"{len(leaked)} answer(s) shared between train and holdout/canary")
     doc = {
         "salt": SALT,
-        "splits": {p: sorted(s for s in rsi_common.GOLD_SUITES if split_of(s) == p)
+        # Pool listing spans gold-answer + execution-graded suites; fingerprints
+        # (_hashes, the actual leakage firewall) remain gold-only, so exec suites
+        # are evaluated without ever entering the train fingerprint set.
+        "splits": {p: sorted(s for s in rsi_common.EVAL_SUITES if split_of(s) == p)
                    for p in ("train", "holdout", "canary")},
         "_hashes": {k: sorted(v) for k, v in hashes.items()},
     }
