@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-12 23:41 UTC",
+  "generated_at": "2026-07-13 02:56 UTC",
   "pages_url": "https://tkarcheski.github.io/tk-tt-inference-server/",
   "repo_url": "https://github.com/tkarcheski/tk-tt-inference-server",
   "doc_url": "https://github.com/tkarcheski/tk-tt-inference-server/blob/gh-pages/rsi-loop.md",
@@ -15,12 +15,12 @@
   },
   "shadow_only": true,
   "summary": {
-    "total_rounds": 67,
-    "graded_rounds": 65,
+    "total_rounds": 68,
+    "graded_rounds": 66,
     "proposed": 0,
     "best_canary_delta_pp": -5.0,
-    "latest_seed": 1061,
-    "latest_started": "2026-07-12T19:45:51"
+    "latest_seed": 1062,
+    "latest_started": "2026-07-13T00:44:44"
   },
   "rounds": [
     {
@@ -1752,6 +1752,32 @@
         "tuned_pass": 41.9,
         "delta_pp": -3.2,
         "p_value": 1.0,
+        "passes": false
+      },
+      "canary": {
+        "n": 20,
+        "base_pass": 80.0,
+        "tuned_pass": 35.0,
+        "delta_pp": -45.0,
+        "p_value": 1.0,
+        "passes": false
+      },
+      "degenerate": false,
+      "proposed": false
+    },
+    {
+      "seed": 1062,
+      "started": "2026-07-13T00:44:44",
+      "tuned_id": "95bbdac4-30f9-4d85-81b0-d3ee8481fb0c",
+      "base_id": "a4ea50fd-cbf5-4e5f-9c59-6834976e012b",
+      "lora_hash": "422fbaec",
+      "train_pool_hash": "97692501",
+      "holdout": {
+        "n": 31,
+        "base_pass": 77.4,
+        "tuned_pass": 58.1,
+        "delta_pp": -19.4,
+        "p_value": 0.9961,
         "passes": false
       },
       "canary": {
