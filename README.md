@@ -12,16 +12,17 @@
 
 ## Summary
 
-- Rounds run: **114** (112 graded)
+- Rounds run: **115** (113 graded)
 - Rounds that passed the gate (proposed): **0**
 - Best canary Δ so far: **-5.0 pp**
-- Latest round: seed `1108` at 2026-07-19T15:45:34
-- Generated: 2026-07-19 17:55 UTC
+- Latest round: seed `1109` at 2026-07-19T18:28:59
+- Generated: 2026-07-19 19:48 UTC
 
 ## Rounds (most recent first)
 
 | Seed | Started | Holdout Δpp (p) | Canary Δpp (p) | Gate |
 |---:|:--|:--|:--|:--|
+| 1109 | 2026-07-19T18:28:59 | -22.6 (p=0.998) | -25.0 (p=0.9922) | 🔴 held |
 | 1108 | 2026-07-19T15:45:34 | -35.5 (p=1.0) | -20.0 (p=0.9844) | 🔴 held |
 | 1107 | 2026-07-19T14:24:08 | -22.6 (p=0.998) | -15.0 (p=0.9688) | 🔴 held |
 | 1106 | 2026-07-19T10:18:18 | -3.2 (p=1.0) | -15.0 (p=0.9375) | 🔴 held |
